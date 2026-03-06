@@ -1,0 +1,10 @@
+# EdgeMarkets Backend Execution Rules
+
+- Keep each source file under 550 LOC.
+- Use TypeScript strict mode and explicit domain types.
+- Favor small modules: `routes`, `services`, `repositories`, `domain`, `config`.
+- Do not couple route handlers directly to storage; call services.
+- Return API responses as `{ data, error }` shapes.
+- Validate all mutating payloads with zod.
+- Use clear action names (`createStrategy`, `followStrategy`, `pauseFollow`).
+- Keep README and docs concise; avoid redundant markdown files.
