@@ -34,12 +34,18 @@ src/
 - `POST /api/trigger-jobs`
 - `POST /api/trigger-jobs/run-once`
 - `GET /api/execution-logs`
+- `GET /api/audit-logs`
 
 `POST /api/strategies/:strategyId/follows` expects:
 - `userId`
 - `maxDailyLossUsd`
 - `maxMarketExposureUsd`
 - `fundingStablecoin` (`USDC`, `USDT`, `DAI`)
+
+Mutating endpoints support optional `Idempotency-Key` header:
+- `POST /api/strategies`
+- `POST /api/strategies/:strategyId/follows`
+- `POST /api/trigger-jobs`
 
 ## Execution Phases (Backend)
 ### Phase 1: Core API (done)
@@ -55,7 +61,7 @@ src/
 ### Phase 3: Durable Execution (in progress)
 - `Chunk 3.1`: MongoDB persistence provider + seed + repository abstraction
 - `Chunk 3.2`: Trigger job queue + worker loop + execution logs
-- `Chunk 3.3`: Audit trail + idempotent order lifecycle
+- `Chunk 3.3`: Audit trail + idempotent order lifecycle (done)
 
 ## Run
 ```bash

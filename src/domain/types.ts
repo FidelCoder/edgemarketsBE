@@ -16,6 +16,16 @@ export type TriggerJobStatus = "pending" | "processing" | "completed" | "failed"
 
 export type TriggerExecutionOutcome = "executed" | "failed" | "rescheduled";
 
+export type AuditActorType = "user" | "system" | "worker";
+
+export type AuditEntityType =
+  | "strategy"
+  | "follow"
+  | "trigger_job"
+  | "execution_log"
+  | "idempotency"
+  | "worker";
+
 export interface Market {
   id: string;
   question: string;
@@ -118,6 +128,7 @@ export interface TriggerJob {
   fundingStablecoin: StablecoinSymbol;
   allocationUsd: number;
   status: TriggerJobStatus;
+  stateVersion: number;
   attemptCount: number;
   maxAttempts: number;
   nextRunAt: string;
@@ -162,6 +173,50 @@ export interface TriggerWorkerTickResult {
   completed: number;
   rescheduled: number;
   failed: number;
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  actorType: AuditActorType;
+  actorId: string;
+  entityType: AuditEntityType;
+  entityId?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CreateAuditLogInput {
+  action: string;
+  actorType: AuditActorType;
+  actorId: string;
+  entityType: AuditEntityType;
+  entityId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AuditLogQuery {
+  actorId?: string;
+  entityType?: AuditEntityType;
+  limit?: number;
+}
+
+export interface IdempotencyRecord {
+  id: string;
+  key: string;
+  scope: string;
+  requestHash: string;
+  statusCode: number;
+  responseBody: string;
+  createdAt: string;
+}
+
+export interface CreateIdempotencyRecordInput {
+  key: string;
+  scope: string;
+  requestHash: string;
+  statusCode: number;
+  responseBody: string;
 }
 
 export interface ApiResponse<T> {

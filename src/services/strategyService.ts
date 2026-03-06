@@ -7,6 +7,7 @@ import {
   StrategyWithMarket
 } from "../domain/types.js";
 import { getStore } from "../repositories/storeProvider.js";
+import { createAuditLog } from "./auditService.js";
 
 const enrichStrategies = async (strategies: Strategy[]): Promise<StrategyWithMarket[]> => {
   const store = getStore();
@@ -43,6 +44,19 @@ export const createStrategy = async (payload: CreateStrategyInput): Promise<Stra
   }
 
   const created = await store.createStrategy(payload);
+  await createAuditLog({
+    action: "strategy.created",
+    actorType: "user",
+    actorId: payload.creatorHandle,
+    entityType: "strategy",
+    entityId: created.id,
+    metadata: {
+      marketId: payload.marketId,
+      triggerType: payload.triggerType,
+      action: payload.action,
+      allocationUsd: payload.allocationUsd
+    }
+  });
 
   return {
     ...created,
@@ -83,6 +97,20 @@ export const followStrategy = async (
 
     throw error;
   }
+
+  await createAuditLog({
+    action: "follow.created",
+    actorType: "user",
+    actorId: payload.userId,
+    entityType: "follow",
+    entityId: follow.id,
+    metadata: {
+      strategyId,
+      fundingStablecoin: payload.fundingStablecoin,
+      maxDailyLossUsd: payload.maxDailyLossUsd,
+      maxMarketExposureUsd: payload.maxMarketExposureUsd
+    }
+  });
 
   const updatedStrategy = await store.getStrategyById(strategyId);
   const market = await store.getMarketById(strategy.marketId);

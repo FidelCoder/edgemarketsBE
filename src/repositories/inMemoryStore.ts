@@ -1,14 +1,23 @@
 import {
+  AuditLog,
+  AuditLogQuery,
+  CreateAuditLogInput,
   CreateExecutionLogInput,
+  CreateIdempotencyRecordInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
+  IdempotencyRecord,
   Market,
   StablecoinAsset,
   Strategy,
   TriggerJob,
   TriggerJobQuery
 } from "../domain/types.js";
+import {
+  assertTransitionAllowed,
+  nextStatusForTransition
+} from "../domain/triggerStateMachine.js";
 import { createId } from "../utils/id.js";
 import { DataStore } from "./dataStore.js";
 import {
@@ -23,6 +32,10 @@ const sortByCreatedAtDesc = <T extends { createdAt: string }>(items: T[]): T[] =
   return [...items].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 };
 
+const makeDuplicateError = (message: string): Error & { code: number } => {
+  return Object.assign(new Error(message), { code: 11000 });
+};
+
 export class InMemoryStore implements DataStore {
   private markets: Market[];
   private strategies: Strategy[];
@@ -30,6 +43,8 @@ export class InMemoryStore implements DataStore {
   private stablecoins: StablecoinAsset[];
   private triggerJobs: TriggerJob[];
   private executionLogs: ExecutionLog[];
+  private auditLogs: AuditLog[];
+  private idempotencyRecords: IdempotencyRecord[];
 
   constructor() {
     this.markets = createSeedMarkets();
@@ -38,6 +53,8 @@ export class InMemoryStore implements DataStore {
     this.stablecoins = createSeedStablecoins();
     this.triggerJobs = [];
     this.executionLogs = [];
+    this.auditLogs = [];
+    this.idempotencyRecords = [];
   }
 
   public async connect(): Promise<void> {
@@ -140,6 +157,7 @@ export class InMemoryStore implements DataStore {
       fundingStablecoin: payload.fundingStablecoin,
       allocationUsd: payload.allocationUsd,
       status: "pending",
+      stateVersion: 0,
       attemptCount: 0,
       maxAttempts: payload.maxAttempts ?? 3,
       nextRunAt: timestamp,
@@ -148,7 +166,6 @@ export class InMemoryStore implements DataStore {
     };
 
     this.triggerJobs = [created, ...this.triggerJobs];
-
     return created;
   }
 
@@ -161,9 +178,12 @@ export class InMemoryStore implements DataStore {
       return undefined;
     }
 
+    assertTransitionAllowed(nextPending.status, "claim");
+
     const claimed: TriggerJob = {
       ...nextPending,
-      status: "processing",
+      status: nextStatusForTransition("claim"),
+      stateVersion: nextPending.stateVersion + 1,
       attemptCount: nextPending.attemptCount + 1,
       updatedAt: nowIso()
     };
@@ -176,13 +196,16 @@ export class InMemoryStore implements DataStore {
   public async completeTriggerJob(jobId: string): Promise<TriggerJob | undefined> {
     const existing = this.triggerJobs.find((job) => job.id === jobId);
 
-    if (!existing) {
+    if (!existing || existing.status !== "processing") {
       return undefined;
     }
 
+    assertTransitionAllowed(existing.status, "complete");
+
     const completed: TriggerJob = {
       ...existing,
-      status: "completed",
+      status: nextStatusForTransition("complete"),
+      stateVersion: existing.stateVersion + 1,
       updatedAt: nowIso(),
       lastError: undefined
     };
@@ -199,13 +222,18 @@ export class InMemoryStore implements DataStore {
   ): Promise<TriggerJob | undefined> {
     const existing = this.triggerJobs.find((job) => job.id === jobId);
 
-    if (!existing) {
+    if (!existing || existing.status !== "processing") {
       return undefined;
     }
 
+    const transition = retryAtIso ? "retry" : "fail";
+
+    assertTransitionAllowed(existing.status, transition);
+
     const updated: TriggerJob = {
       ...existing,
-      status: retryAtIso ? "pending" : "failed",
+      status: nextStatusForTransition(transition),
+      stateVersion: existing.stateVersion + 1,
       nextRunAt: retryAtIso ?? existing.nextRunAt,
       updatedAt: nowIso(),
       lastError: errorMessage
@@ -232,6 +260,70 @@ export class InMemoryStore implements DataStore {
     };
 
     this.executionLogs = [created, ...this.executionLogs];
+
+    return created;
+  }
+
+  public async listAuditLogs(query?: AuditLogQuery): Promise<AuditLog[]> {
+    const filtered = this.auditLogs.filter((auditLog) => {
+      if (query?.actorId && auditLog.actorId !== query.actorId) {
+        return false;
+      }
+
+      if (query?.entityType && auditLog.entityType !== query.entityType) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const sorted = sortByCreatedAtDesc(filtered);
+    const limit = query?.limit ?? 100;
+
+    return sorted.slice(0, limit);
+  }
+
+  public async createAuditLog(payload: CreateAuditLogInput): Promise<AuditLog> {
+    const created: AuditLog = {
+      id: createId(),
+      action: payload.action,
+      actorType: payload.actorType,
+      actorId: payload.actorId,
+      entityType: payload.entityType,
+      entityId: payload.entityId,
+      metadata: payload.metadata ?? {},
+      createdAt: nowIso()
+    };
+
+    this.auditLogs = [created, ...this.auditLogs];
+
+    return created;
+  }
+
+  public async getIdempotencyRecord(key: string, scope: string): Promise<IdempotencyRecord | undefined> {
+    return this.idempotencyRecords.find((record) => record.key === key && record.scope === scope);
+  }
+
+  public async createIdempotencyRecord(
+    payload: CreateIdempotencyRecordInput
+  ): Promise<IdempotencyRecord> {
+    const existing = await this.getIdempotencyRecord(payload.key, payload.scope);
+
+    if (existing) {
+      throw makeDuplicateError("Duplicate idempotency record.");
+    }
+
+    const created: IdempotencyRecord = {
+      id: createId(),
+      key: payload.key,
+      scope: payload.scope,
+      requestHash: payload.requestHash,
+      statusCode: payload.statusCode,
+      responseBody: payload.responseBody,
+      createdAt: nowIso()
+    };
+
+    this.idempotencyRecords = [created, ...this.idempotencyRecords];
 
     return created;
   }

@@ -52,3 +52,11 @@ export const executionLogQuerySchema = z.object({
 export const triggerWorkerRunSchema = z.object({
   maxJobs: z.number().int().min(1).max(50).optional()
 });
+
+export const auditLogQuerySchema = z.object({
+  actorId: z.string().min(3).max(64).optional(),
+  entityType: z
+    .enum(["strategy", "follow", "trigger_job", "execution_log", "idempotency", "worker"])
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional()
+});

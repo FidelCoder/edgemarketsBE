@@ -1,9 +1,14 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import {
+  AuditLog,
+  AuditLogQuery,
+  CreateAuditLogInput,
   CreateExecutionLogInput,
+  CreateIdempotencyRecordInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
+  IdempotencyRecord,
   Market,
   StablecoinAsset,
   Strategy,
@@ -25,6 +30,8 @@ interface StoreCollections {
   stablecoins: Collection<StablecoinAsset>;
   triggerJobs: Collection<TriggerJob>;
   executionLogs: Collection<ExecutionLog>;
+  auditLogs: Collection<AuditLog>;
+  idempotencyRecords: Collection<IdempotencyRecord>;
 }
 
 const nowIso = (): string => new Date().toISOString();
@@ -57,7 +64,11 @@ export class MongoStore implements DataStore {
       collections.triggerJobs.createIndex({ id: 1 }, { unique: true }),
       collections.triggerJobs.createIndex({ status: 1, nextRunAt: 1 }),
       collections.executionLogs.createIndex({ id: 1 }, { unique: true }),
-      collections.executionLogs.createIndex({ userId: 1, createdAt: -1 })
+      collections.executionLogs.createIndex({ userId: 1, createdAt: -1 }),
+      collections.auditLogs.createIndex({ id: 1 }, { unique: true }),
+      collections.auditLogs.createIndex({ entityType: 1, createdAt: -1 }),
+      collections.idempotencyRecords.createIndex({ id: 1 }, { unique: true }),
+      collections.idempotencyRecords.createIndex({ scope: 1, key: 1 }, { unique: true })
     ]);
 
     await this.seedIfEmpty();
@@ -177,6 +188,7 @@ export class MongoStore implements DataStore {
       fundingStablecoin: payload.fundingStablecoin,
       allocationUsd: payload.allocationUsd,
       status: "pending",
+      stateVersion: 0,
       attemptCount: 0,
       maxAttempts: payload.maxAttempts ?? 3,
       nextRunAt: timestamp,
@@ -192,49 +204,31 @@ export class MongoStore implements DataStore {
   public async claimNextTriggerJob(nowTimestampIso: string): Promise<TriggerJob | undefined> {
     const collections = this.getCollections();
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const candidate = await collections.triggerJobs.findOne(
-        { status: "pending", nextRunAt: { $lte: nowTimestampIso } },
-        {
-          sort: { nextRunAt: 1, createdAt: 1 },
-          projection: { _id: 0 }
-        }
-      );
-
-      if (!candidate) {
-        return undefined;
-      }
-
-      const result = await collections.triggerJobs.findOneAndUpdate(
-        { id: candidate.id, status: "pending" },
-        {
-          $set: {
-            status: "processing",
-            updatedAt: nowIso()
-          },
-          $inc: {
-            attemptCount: 1
-          }
+    const result = await collections.triggerJobs.findOneAndUpdate(
+      { status: "pending", nextRunAt: { $lte: nowTimestampIso } },
+      {
+        $set: {
+          status: "processing",
+          updatedAt: nowIso()
         },
-        {
-          projection: { _id: 0 },
-          returnDocument: "after"
+        $inc: {
+          attemptCount: 1,
+          stateVersion: 1
         }
-      );
-
-      const claimed = this.extractFindOneAndUpdateResult<TriggerJob>(result);
-
-      if (claimed) {
-        return claimed;
+      },
+      {
+        sort: { nextRunAt: 1, createdAt: 1 },
+        projection: { _id: 0 },
+        returnDocument: "after"
       }
-    }
+    );
 
-    return undefined;
+    return this.extractFindOneAndUpdateResult<TriggerJob>(result) ?? undefined;
   }
 
   public async completeTriggerJob(jobId: string): Promise<TriggerJob | undefined> {
     const result = await this.getCollections().triggerJobs.findOneAndUpdate(
-      { id: jobId },
+      { id: jobId, status: "processing" },
       {
         $set: {
           status: "completed",
@@ -242,6 +236,9 @@ export class MongoStore implements DataStore {
         },
         $unset: {
           lastError: ""
+        },
+        $inc: {
+          stateVersion: 1
         }
       },
       {
@@ -270,9 +267,12 @@ export class MongoStore implements DataStore {
     }
 
     const result = await this.getCollections().triggerJobs.findOneAndUpdate(
-      { id: jobId },
+      { id: jobId, status: "processing" },
       {
-        $set: setValues
+        $set: setValues,
+        $inc: {
+          stateVersion: 1
+        }
       },
       {
         projection: { _id: 0 },
@@ -305,6 +305,72 @@ export class MongoStore implements DataStore {
     return created;
   }
 
+  public async listAuditLogs(query?: AuditLogQuery): Promise<AuditLog[]> {
+    const filter: Record<string, string> = {};
+
+    if (query?.actorId) {
+      filter.actorId = query.actorId;
+    }
+
+    if (query?.entityType) {
+      filter.entityType = query.entityType;
+    }
+
+    const limit = query?.limit ?? 100;
+
+    return this.getCollections()
+      .auditLogs
+      .find(filter, { projection: { _id: 0 } })
+      .sort(sortByCreatedAtDesc)
+      .limit(limit)
+      .toArray();
+  }
+
+  public async createAuditLog(payload: CreateAuditLogInput): Promise<AuditLog> {
+    const created: AuditLog = {
+      id: createId(),
+      action: payload.action,
+      actorType: payload.actorType,
+      actorId: payload.actorId,
+      entityType: payload.entityType,
+      entityId: payload.entityId,
+      metadata: payload.metadata ?? {},
+      createdAt: nowIso()
+    };
+
+    await this.getCollections().auditLogs.insertOne(created);
+
+    return created;
+  }
+
+  public async getIdempotencyRecord(
+    key: string,
+    scope: string
+  ): Promise<IdempotencyRecord | undefined> {
+    return this.getCollections().idempotencyRecords.findOne(
+      { key, scope },
+      { projection: { _id: 0 } }
+    ) as Promise<IdempotencyRecord | undefined>;
+  }
+
+  public async createIdempotencyRecord(
+    payload: CreateIdempotencyRecordInput
+  ): Promise<IdempotencyRecord> {
+    const created: IdempotencyRecord = {
+      id: createId(),
+      key: payload.key,
+      scope: payload.scope,
+      requestHash: payload.requestHash,
+      statusCode: payload.statusCode,
+      responseBody: payload.responseBody,
+      createdAt: nowIso()
+    };
+
+    await this.getCollections().idempotencyRecords.insertOne(created);
+
+    return created;
+  }
+
   private getCollections(): StoreCollections {
     if (!this.db) {
       throw new Error("MongoStore is not connected.");
@@ -316,7 +382,9 @@ export class MongoStore implements DataStore {
       follows: this.db.collection<Follow>("follows"),
       stablecoins: this.db.collection<StablecoinAsset>("stablecoins"),
       triggerJobs: this.db.collection<TriggerJob>("trigger_jobs"),
-      executionLogs: this.db.collection<ExecutionLog>("execution_logs")
+      executionLogs: this.db.collection<ExecutionLog>("execution_logs"),
+      auditLogs: this.db.collection<AuditLog>("audit_logs"),
+      idempotencyRecords: this.db.collection<IdempotencyRecord>("idempotency_records")
     };
   }
 

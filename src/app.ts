@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import Fastify, { FastifyInstance } from "fastify";
 import { isAllowedOrigin } from "./config/cors.js";
 import { closeStore, initializeStore } from "./repositories/storeProvider.js";
+import { registerAuditRoutes } from "./routes/auditRoutes.js";
 import { registerHealthRoute } from "./routes/healthRoute.js";
 import { registerMarketRoutes } from "./routes/marketRoutes.js";
 import { registerRuntimeRoutes } from "./routes/runtimeRoutes.js";
@@ -33,6 +34,7 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   await registerRuntimeRoutes(app);
   await registerStrategyRoutes(app);
   await registerTriggerJobRoutes(app);
+  await registerAuditRoutes(app);
 
   startTriggerWorker(app.log);
 

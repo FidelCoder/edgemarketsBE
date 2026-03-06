@@ -12,6 +12,10 @@ import {
   listTriggerJobs,
   processTriggerJobsTick
 } from "../services/triggerJobService.js";
+import {
+  parseIdempotencyKey,
+  runIdempotentMutation
+} from "../services/idempotencyService.js";
 
 export const registerTriggerJobRoutes = async (app: FastifyInstance): Promise<void> => {
   app.get("/api/trigger-jobs", async (request) => {
@@ -34,13 +38,29 @@ export const registerTriggerJobRoutes = async (app: FastifyInstance): Promise<vo
       throw new AppError(parsedBody.error.errors[0]?.message ?? "Invalid trigger job payload.", 400);
     }
 
-    const created = await createTriggerJob(parsedBody.data);
+    const idempotencyKey = parseIdempotencyKey(request.headers["idempotency-key"]);
+    const result = await runIdempotentMutation({
+      scope: "trigger-jobs.create",
+      actorId: parsedBody.data.userId,
+      idempotencyKey,
+      requestBody: parsedBody.data,
+      execute: async () => ({
+        statusCode: 201,
+        body: {
+          data: await createTriggerJob(parsedBody.data),
+          error: null
+        }
+      })
+    });
 
-    reply.status(201);
-    return {
-      data: created,
-      error: null
-    };
+    reply.header("idempotency-status", result.key ? (result.replayed ? "replayed" : "created") : "none");
+
+    if (result.key) {
+      reply.header("idempotency-key", result.key);
+    }
+
+    reply.status(result.statusCode);
+    return result.body;
   });
 
   app.post("/api/trigger-jobs/run-once", async (request) => {

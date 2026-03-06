@@ -1,8 +1,13 @@
 import {
+  AuditLog,
+  AuditLogQuery,
+  CreateAuditLogInput,
   CreateExecutionLogInput,
+  CreateIdempotencyRecordInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
+  IdempotencyRecord,
   Market,
   StablecoinAsset,
   Strategy,
@@ -29,4 +34,8 @@ export interface DataStore {
   failTriggerJob(jobId: string, errorMessage: string, retryAtIso?: string): Promise<TriggerJob | undefined>;
   listExecutionLogs(userId?: string): Promise<ExecutionLog[]>;
   createExecutionLog(payload: CreateExecutionLogInput): Promise<ExecutionLog>;
+  listAuditLogs(query?: AuditLogQuery): Promise<AuditLog[]>;
+  createAuditLog(payload: CreateAuditLogInput): Promise<AuditLog>;
+  getIdempotencyRecord(key: string, scope: string): Promise<IdempotencyRecord | undefined>;
+  createIdempotencyRecord(payload: CreateIdempotencyRecordInput): Promise<IdempotencyRecord>;
 }

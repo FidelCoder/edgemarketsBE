@@ -13,6 +13,10 @@ import {
   listStrategies,
   listUserFollows
 } from "../services/strategyService.js";
+import {
+  parseIdempotencyKey,
+  runIdempotentMutation
+} from "../services/idempotencyService.js";
 
 export const registerStrategyRoutes = async (app: FastifyInstance): Promise<void> => {
   app.get("/api/strategies", async () => {
@@ -29,13 +33,29 @@ export const registerStrategyRoutes = async (app: FastifyInstance): Promise<void
       throw new AppError(parsed.error.errors[0]?.message ?? "Invalid strategy payload.", 400);
     }
 
-    const strategy = await createStrategy(parsed.data);
+    const idempotencyKey = parseIdempotencyKey(request.headers["idempotency-key"]);
+    const result = await runIdempotentMutation({
+      scope: "strategies.create",
+      actorId: parsed.data.creatorHandle,
+      idempotencyKey,
+      requestBody: parsed.data,
+      execute: async () => ({
+        statusCode: 201,
+        body: {
+          data: await createStrategy(parsed.data),
+          error: null
+        }
+      })
+    });
 
-    reply.status(201);
-    return {
-      data: strategy,
-      error: null
-    };
+    reply.header("idempotency-status", result.key ? (result.replayed ? "replayed" : "created") : "none");
+
+    if (result.key) {
+      reply.header("idempotency-key", result.key);
+    }
+
+    reply.status(result.statusCode);
+    return result.body;
   });
 
   app.post("/api/strategies/:strategyId/follows", async (request, reply) => {
@@ -52,13 +72,32 @@ export const registerStrategyRoutes = async (app: FastifyInstance): Promise<void
       throw new AppError(validationMessage ?? "Invalid follow payload.", 400);
     }
 
-    const result = await followStrategy(parsedParams.data.strategyId, parsedBody.data);
+    const idempotencyKey = parseIdempotencyKey(request.headers["idempotency-key"]);
+    const result = await runIdempotentMutation({
+      scope: `strategies.follow.${parsedParams.data.strategyId}`,
+      actorId: parsedBody.data.userId,
+      idempotencyKey,
+      requestBody: {
+        strategyId: parsedParams.data.strategyId,
+        ...parsedBody.data
+      },
+      execute: async () => ({
+        statusCode: 201,
+        body: {
+          data: await followStrategy(parsedParams.data.strategyId, parsedBody.data),
+          error: null
+        }
+      })
+    });
 
-    reply.status(201);
-    return {
-      data: result,
-      error: null
-    };
+    reply.header("idempotency-status", result.key ? (result.replayed ? "replayed" : "created") : "none");
+
+    if (result.key) {
+      reply.header("idempotency-key", result.key);
+    }
+
+    reply.status(result.statusCode);
+    return result.body;
   });
 
   app.get("/api/users/:userId/follows", async (request) => {
