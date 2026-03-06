@@ -79,5 +79,6 @@ export const env = {
   triggerWorkerEnabled: parseBoolean(process.env.TRIGGER_WORKER_ENABLED, true),
   triggerWorkerIntervalMs: toPositiveInt(process.env.TRIGGER_WORKER_INTERVAL_MS, 6000),
   triggerWorkerBatchSize: toPositiveInt(process.env.TRIGGER_WORKER_BATCH_SIZE, 10),
-  triggerWorkerRetryDelayMs: toPositiveInt(process.env.TRIGGER_WORKER_RETRY_DELAY_MS, 15000)
+  triggerWorkerRetryDelayMs: toPositiveInt(process.env.TRIGGER_WORKER_RETRY_DELAY_MS, 15000),
+  authHandoffTtlSeconds: toPositiveInt(process.env.AUTH_HANDOFF_TTL_SECONDS, 600)
 };

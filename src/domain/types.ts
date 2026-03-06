@@ -18,13 +18,17 @@ export type TriggerExecutionOutcome = "executed" | "failed" | "rescheduled";
 
 export type AuditActorType = "user" | "system" | "worker";
 
+export type AuthClient = "web" | "extension";
+
 export type AuditEntityType =
   | "strategy"
   | "follow"
   | "trigger_job"
   | "execution_log"
   | "idempotency"
-  | "worker";
+  | "worker"
+  | "session"
+  | "handoff";
 
 export interface Market {
   id: string;
@@ -217,6 +221,51 @@ export interface CreateIdempotencyRecordInput {
   requestHash: string;
   statusCode: number;
   responseBody: string;
+}
+
+export interface AuthSession {
+  id: string;
+  token: string;
+  walletAddress: string;
+  userId: string;
+  client: AuthClient;
+  linkedSessionId?: string;
+  createdAt: string;
+  lastActiveAt: string;
+}
+
+export interface CreateAuthSessionInput {
+  walletAddress: string;
+  client: AuthClient;
+  linkedSessionId?: string;
+}
+
+export interface SessionHandoff {
+  id: string;
+  code: string;
+  sourceSessionId: string;
+  walletAddress: string;
+  userId: string;
+  createdAt: string;
+  expiresAt: string;
+  consumedAt?: string;
+}
+
+export interface CreateSessionHandoffInput {
+  code: string;
+  sourceSessionId: string;
+  walletAddress: string;
+  userId: string;
+  expiresAt: string;
+}
+
+export interface CreateAuthSessionApiInput {
+  walletAddress: string;
+  client?: AuthClient;
+}
+
+export interface ConsumeSessionHandoffInput {
+  handoffCode: string;
 }
 
 export interface ApiResponse<T> {

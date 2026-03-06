@@ -56,7 +56,16 @@ export const triggerWorkerRunSchema = z.object({
 export const auditLogQuerySchema = z.object({
   actorId: z.string().min(3).max(64).optional(),
   entityType: z
-    .enum(["strategy", "follow", "trigger_job", "execution_log", "idempotency", "worker"])
+    .enum(["strategy", "follow", "trigger_job", "execution_log", "idempotency", "worker", "session", "handoff"])
     .optional(),
   limit: z.coerce.number().int().min(1).max(200).optional()
+});
+
+export const createAuthSessionSchema = z.object({
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  client: z.enum(["web", "extension"]).optional()
+});
+
+export const consumeHandoffSchema = z.object({
+  handoffCode: z.string().regex(/^EM-[A-Z0-9]{8}$/)
 });

@@ -1,14 +1,18 @@
 import {
+  AuthSession,
   AuditLog,
   AuditLogQuery,
+  CreateAuthSessionInput,
   CreateAuditLogInput,
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
+  CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
   IdempotencyRecord,
   Market,
+  SessionHandoff,
   StablecoinAsset,
   Strategy,
   TriggerJob,
@@ -45,6 +49,8 @@ export class InMemoryStore implements DataStore {
   private executionLogs: ExecutionLog[];
   private auditLogs: AuditLog[];
   private idempotencyRecords: IdempotencyRecord[];
+  private authSessions: AuthSession[];
+  private sessionHandoffs: SessionHandoff[];
 
   constructor() {
     this.markets = createSeedMarkets();
@@ -55,6 +61,8 @@ export class InMemoryStore implements DataStore {
     this.executionLogs = [];
     this.auditLogs = [];
     this.idempotencyRecords = [];
+    this.authSessions = [];
+    this.sessionHandoffs = [];
   }
 
   public async connect(): Promise<void> {
@@ -326,5 +334,91 @@ export class InMemoryStore implements DataStore {
     this.idempotencyRecords = [created, ...this.idempotencyRecords];
 
     return created;
+  }
+
+  public async createAuthSession(payload: CreateAuthSessionInput): Promise<AuthSession> {
+    const timestamp = nowIso();
+
+    const created: AuthSession = {
+      id: createId(),
+      token: `sess_${createId()}`,
+      walletAddress: payload.walletAddress.toLowerCase(),
+      userId: `wallet:${payload.walletAddress.toLowerCase()}`,
+      client: payload.client,
+      linkedSessionId: payload.linkedSessionId,
+      createdAt: timestamp,
+      lastActiveAt: timestamp
+    };
+
+    this.authSessions = [created, ...this.authSessions];
+
+    return created;
+  }
+
+  public async getAuthSessionByToken(token: string): Promise<AuthSession | undefined> {
+    return this.authSessions.find((session) => session.token === token);
+  }
+
+  public async updateAuthSessionLastActive(token: string): Promise<AuthSession | undefined> {
+    const existing = await this.getAuthSessionByToken(token);
+
+    if (!existing) {
+      return undefined;
+    }
+
+    const updated: AuthSession = {
+      ...existing,
+      lastActiveAt: nowIso()
+    };
+
+    this.authSessions = this.authSessions.map((session) => (session.id === existing.id ? updated : session));
+
+    return updated;
+  }
+
+  public async createSessionHandoff(payload: CreateSessionHandoffInput): Promise<SessionHandoff> {
+    const duplicate = this.sessionHandoffs.find((handoff) => handoff.code === payload.code);
+
+    if (duplicate) {
+      throw makeDuplicateError("Duplicate handoff code.");
+    }
+
+    const created: SessionHandoff = {
+      id: createId(),
+      code: payload.code,
+      sourceSessionId: payload.sourceSessionId,
+      walletAddress: payload.walletAddress.toLowerCase(),
+      userId: payload.userId,
+      createdAt: nowIso(),
+      expiresAt: payload.expiresAt
+    };
+
+    this.sessionHandoffs = [created, ...this.sessionHandoffs];
+
+    return created;
+  }
+
+  public async consumeSessionHandoff(
+    code: string,
+    consumedAtIso: string
+  ): Promise<SessionHandoff | undefined> {
+    const existing = this.sessionHandoffs.find(
+      (handoff) => handoff.code === code && !handoff.consumedAt && handoff.expiresAt > consumedAtIso
+    );
+
+    if (!existing) {
+      return undefined;
+    }
+
+    const consumed: SessionHandoff = {
+      ...existing,
+      consumedAt: consumedAtIso
+    };
+
+    this.sessionHandoffs = this.sessionHandoffs.map((handoff) =>
+      handoff.id === existing.id ? consumed : handoff
+    );
+
+    return consumed;
   }
 }

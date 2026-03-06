@@ -1,14 +1,18 @@
 import {
+  AuthSession,
   AuditLog,
   AuditLogQuery,
+  CreateAuthSessionInput,
   CreateAuditLogInput,
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
+  CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
   IdempotencyRecord,
   Market,
+  SessionHandoff,
   StablecoinAsset,
   Strategy,
   TriggerJob,
@@ -38,4 +42,9 @@ export interface DataStore {
   createAuditLog(payload: CreateAuditLogInput): Promise<AuditLog>;
   getIdempotencyRecord(key: string, scope: string): Promise<IdempotencyRecord | undefined>;
   createIdempotencyRecord(payload: CreateIdempotencyRecordInput): Promise<IdempotencyRecord>;
+  createAuthSession(payload: CreateAuthSessionInput): Promise<AuthSession>;
+  getAuthSessionByToken(token: string): Promise<AuthSession | undefined>;
+  updateAuthSessionLastActive(token: string): Promise<AuthSession | undefined>;
+  createSessionHandoff(payload: CreateSessionHandoffInput): Promise<SessionHandoff>;
+  consumeSessionHandoff(code: string, consumedAtIso: string): Promise<SessionHandoff | undefined>;
 }

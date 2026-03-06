@@ -24,6 +24,10 @@ src/
 - `GET /api/health`
 - `GET /api/markets`
 - `GET /api/stablecoins`
+- `POST /api/auth/sessions`
+- `GET /api/auth/sessions/me`
+- `POST /api/auth/handoff/request`
+- `POST /api/auth/handoff/consume`
 - `GET /api/runtime/config`
 - `POST /api/runtime/simulate-follow`
 - `GET /api/strategies`
@@ -84,6 +88,7 @@ Testnet-first defaults:
 - `TRIGGER_WORKER_ENABLED=true`
 - `TRIGGER_WORKER_INTERVAL_MS=6000`
 - `TRIGGER_WORKER_BATCH_SIZE=10`
+- `AUTH_HANDOFF_TTL_SECONDS=600`
 
 Extension/web origin defaults:
 - `ALLOWED_ORIGINS=http://localhost:3000,https://polymarket.com,https://*.polymarket.com,chrome-extension://*`

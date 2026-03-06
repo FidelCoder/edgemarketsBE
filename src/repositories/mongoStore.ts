@@ -1,15 +1,19 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import {
+  AuthSession,
   AuditLog,
   AuditLogQuery,
+  CreateAuthSessionInput,
   CreateAuditLogInput,
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
+  CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
   IdempotencyRecord,
   Market,
+  SessionHandoff,
   StablecoinAsset,
   Strategy,
   TriggerJob,
@@ -32,6 +36,8 @@ interface StoreCollections {
   executionLogs: Collection<ExecutionLog>;
   auditLogs: Collection<AuditLog>;
   idempotencyRecords: Collection<IdempotencyRecord>;
+  authSessions: Collection<AuthSession>;
+  sessionHandoffs: Collection<SessionHandoff>;
 }
 
 const nowIso = (): string => new Date().toISOString();
@@ -68,7 +74,13 @@ export class MongoStore implements DataStore {
       collections.auditLogs.createIndex({ id: 1 }, { unique: true }),
       collections.auditLogs.createIndex({ entityType: 1, createdAt: -1 }),
       collections.idempotencyRecords.createIndex({ id: 1 }, { unique: true }),
-      collections.idempotencyRecords.createIndex({ scope: 1, key: 1 }, { unique: true })
+      collections.idempotencyRecords.createIndex({ scope: 1, key: 1 }, { unique: true }),
+      collections.authSessions.createIndex({ id: 1 }, { unique: true }),
+      collections.authSessions.createIndex({ token: 1 }, { unique: true }),
+      collections.authSessions.createIndex({ walletAddress: 1, client: 1, createdAt: -1 }),
+      collections.sessionHandoffs.createIndex({ id: 1 }, { unique: true }),
+      collections.sessionHandoffs.createIndex({ code: 1 }, { unique: true }),
+      collections.sessionHandoffs.createIndex({ expiresAt: 1 })
     ]);
 
     await this.seedIfEmpty();
@@ -371,6 +383,85 @@ export class MongoStore implements DataStore {
     return created;
   }
 
+  public async createAuthSession(payload: CreateAuthSessionInput): Promise<AuthSession> {
+    const timestamp = nowIso();
+
+    const created: AuthSession = {
+      id: createId(),
+      token: `sess_${createId()}`,
+      walletAddress: payload.walletAddress.toLowerCase(),
+      userId: `wallet:${payload.walletAddress.toLowerCase()}`,
+      client: payload.client,
+      linkedSessionId: payload.linkedSessionId,
+      createdAt: timestamp,
+      lastActiveAt: timestamp
+    };
+
+    await this.getCollections().authSessions.insertOne(created);
+
+    return created;
+  }
+
+  public async getAuthSessionByToken(token: string): Promise<AuthSession | undefined> {
+    return this.getCollections().authSessions.findOne(
+      { token },
+      { projection: { _id: 0 } }
+    ) as Promise<AuthSession | undefined>;
+  }
+
+  public async updateAuthSessionLastActive(token: string): Promise<AuthSession | undefined> {
+    const result = await this.getCollections().authSessions.findOneAndUpdate(
+      { token },
+      {
+        $set: {
+          lastActiveAt: nowIso()
+        }
+      },
+      {
+        projection: { _id: 0 },
+        returnDocument: "after"
+      }
+    );
+
+    return this.extractFindOneAndUpdateResult<AuthSession>(result) ?? undefined;
+  }
+
+  public async createSessionHandoff(payload: CreateSessionHandoffInput): Promise<SessionHandoff> {
+    const created: SessionHandoff = {
+      id: createId(),
+      code: payload.code,
+      sourceSessionId: payload.sourceSessionId,
+      walletAddress: payload.walletAddress.toLowerCase(),
+      userId: payload.userId,
+      createdAt: nowIso(),
+      expiresAt: payload.expiresAt
+    };
+
+    await this.getCollections().sessionHandoffs.insertOne(created);
+
+    return created;
+  }
+
+  public async consumeSessionHandoff(
+    code: string,
+    consumedAtIso: string
+  ): Promise<SessionHandoff | undefined> {
+    const result = await this.getCollections().sessionHandoffs.findOneAndUpdate(
+      { code, consumedAt: { $exists: false }, expiresAt: { $gt: consumedAtIso } },
+      {
+        $set: {
+          consumedAt: consumedAtIso
+        }
+      },
+      {
+        projection: { _id: 0 },
+        returnDocument: "after"
+      }
+    );
+
+    return this.extractFindOneAndUpdateResult<SessionHandoff>(result) ?? undefined;
+  }
+
   private getCollections(): StoreCollections {
     if (!this.db) {
       throw new Error("MongoStore is not connected.");
@@ -384,7 +475,9 @@ export class MongoStore implements DataStore {
       triggerJobs: this.db.collection<TriggerJob>("trigger_jobs"),
       executionLogs: this.db.collection<ExecutionLog>("execution_logs"),
       auditLogs: this.db.collection<AuditLog>("audit_logs"),
-      idempotencyRecords: this.db.collection<IdempotencyRecord>("idempotency_records")
+      idempotencyRecords: this.db.collection<IdempotencyRecord>("idempotency_records"),
+      authSessions: this.db.collection<AuthSession>("auth_sessions"),
+      sessionHandoffs: this.db.collection<SessionHandoff>("session_handoffs")
     };
   }
 
