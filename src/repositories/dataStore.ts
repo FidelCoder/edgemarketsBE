@@ -1,8 +1,13 @@
 import {
+  CreateExecutionLogInput,
+  CreateTriggerJobInput,
+  ExecutionLog,
   Follow,
   Market,
   StablecoinAsset,
-  Strategy
+  Strategy,
+  TriggerJob,
+  TriggerJobQuery
 } from "../domain/types.js";
 
 export interface DataStore {
@@ -17,4 +22,11 @@ export interface DataStore {
   listFollowsByUser(userId: string): Promise<Follow[]>;
   getFollowByUserAndStrategy(userId: string, strategyId: string): Promise<Follow | undefined>;
   createFollow(follow: Omit<Follow, "id" | "createdAt" | "status">): Promise<Follow>;
+  listTriggerJobs(query?: TriggerJobQuery): Promise<TriggerJob[]>;
+  createTriggerJob(payload: CreateTriggerJobInput): Promise<TriggerJob>;
+  claimNextTriggerJob(nowIso: string): Promise<TriggerJob | undefined>;
+  completeTriggerJob(jobId: string): Promise<TriggerJob | undefined>;
+  failTriggerJob(jobId: string, errorMessage: string, retryAtIso?: string): Promise<TriggerJob | undefined>;
+  listExecutionLogs(userId?: string): Promise<ExecutionLog[]>;
+  createExecutionLog(payload: CreateExecutionLogInput): Promise<ExecutionLog>;
 }

@@ -1,8 +1,13 @@
 import {
+  CreateExecutionLogInput,
+  CreateTriggerJobInput,
+  ExecutionLog,
   Follow,
   Market,
   StablecoinAsset,
-  Strategy
+  Strategy,
+  TriggerJob,
+  TriggerJobQuery
 } from "../domain/types.js";
 import { createId } from "../utils/id.js";
 import { DataStore } from "./dataStore.js";
@@ -14,17 +19,25 @@ import {
 
 const nowIso = (): string => new Date().toISOString();
 
+const sortByCreatedAtDesc = <T extends { createdAt: string }>(items: T[]): T[] => {
+  return [...items].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+};
+
 export class InMemoryStore implements DataStore {
   private markets: Market[];
   private strategies: Strategy[];
   private follows: Follow[];
   private stablecoins: StablecoinAsset[];
+  private triggerJobs: TriggerJob[];
+  private executionLogs: ExecutionLog[];
 
   constructor() {
     this.markets = createSeedMarkets();
     this.strategies = createSeedStrategies();
     this.follows = [];
     this.stablecoins = createSeedStablecoins();
+    this.triggerJobs = [];
+    this.executionLogs = [];
   }
 
   public async connect(): Promise<void> {
@@ -48,7 +61,7 @@ export class InMemoryStore implements DataStore {
   }
 
   public async listStrategies(): Promise<Strategy[]> {
-    return this.strategies;
+    return sortByCreatedAtDesc(this.strategies);
   }
 
   public async getStrategyById(strategyId: string): Promise<Strategy | undefined> {
@@ -70,7 +83,7 @@ export class InMemoryStore implements DataStore {
   }
 
   public async listFollowsByUser(userId: string): Promise<Follow[]> {
-    return this.follows.filter((follow) => follow.userId === userId);
+    return sortByCreatedAtDesc(this.follows.filter((follow) => follow.userId === userId));
   }
 
   public async getFollowByUserAndStrategy(
@@ -97,6 +110,128 @@ export class InMemoryStore implements DataStore {
           }
         : strategy
     );
+
+    return created;
+  }
+
+  public async listTriggerJobs(query?: TriggerJobQuery): Promise<TriggerJob[]> {
+    const filtered = this.triggerJobs.filter((job) => {
+      if (query?.status && job.status !== query.status) {
+        return false;
+      }
+
+      if (query?.userId && job.userId !== query.userId) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return sortByCreatedAtDesc(filtered);
+  }
+
+  public async createTriggerJob(payload: CreateTriggerJobInput): Promise<TriggerJob> {
+    const timestamp = nowIso();
+
+    const created: TriggerJob = {
+      id: createId(),
+      strategyId: payload.strategyId,
+      userId: payload.userId,
+      fundingStablecoin: payload.fundingStablecoin,
+      allocationUsd: payload.allocationUsd,
+      status: "pending",
+      attemptCount: 0,
+      maxAttempts: payload.maxAttempts ?? 3,
+      nextRunAt: timestamp,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    this.triggerJobs = [created, ...this.triggerJobs];
+
+    return created;
+  }
+
+  public async claimNextTriggerJob(nowTimestampIso: string): Promise<TriggerJob | undefined> {
+    const nextPending = [...this.triggerJobs]
+      .filter((job) => job.status === "pending" && job.nextRunAt <= nowTimestampIso)
+      .sort((left, right) => left.nextRunAt.localeCompare(right.nextRunAt))[0];
+
+    if (!nextPending) {
+      return undefined;
+    }
+
+    const claimed: TriggerJob = {
+      ...nextPending,
+      status: "processing",
+      attemptCount: nextPending.attemptCount + 1,
+      updatedAt: nowIso()
+    };
+
+    this.triggerJobs = this.triggerJobs.map((job) => (job.id === claimed.id ? claimed : job));
+
+    return claimed;
+  }
+
+  public async completeTriggerJob(jobId: string): Promise<TriggerJob | undefined> {
+    const existing = this.triggerJobs.find((job) => job.id === jobId);
+
+    if (!existing) {
+      return undefined;
+    }
+
+    const completed: TriggerJob = {
+      ...existing,
+      status: "completed",
+      updatedAt: nowIso(),
+      lastError: undefined
+    };
+
+    this.triggerJobs = this.triggerJobs.map((job) => (job.id === completed.id ? completed : job));
+
+    return completed;
+  }
+
+  public async failTriggerJob(
+    jobId: string,
+    errorMessage: string,
+    retryAtIso?: string
+  ): Promise<TriggerJob | undefined> {
+    const existing = this.triggerJobs.find((job) => job.id === jobId);
+
+    if (!existing) {
+      return undefined;
+    }
+
+    const updated: TriggerJob = {
+      ...existing,
+      status: retryAtIso ? "pending" : "failed",
+      nextRunAt: retryAtIso ?? existing.nextRunAt,
+      updatedAt: nowIso(),
+      lastError: errorMessage
+    };
+
+    this.triggerJobs = this.triggerJobs.map((job) => (job.id === updated.id ? updated : job));
+
+    return updated;
+  }
+
+  public async listExecutionLogs(userId?: string): Promise<ExecutionLog[]> {
+    const filtered = userId
+      ? this.executionLogs.filter((log) => log.userId === userId)
+      : this.executionLogs;
+
+    return sortByCreatedAtDesc(filtered);
+  }
+
+  public async createExecutionLog(payload: CreateExecutionLogInput): Promise<ExecutionLog> {
+    const created: ExecutionLog = {
+      id: createId(),
+      ...payload,
+      createdAt: nowIso()
+    };
+
+    this.executionLogs = [created, ...this.executionLogs];
 
     return created;
   }

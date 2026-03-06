@@ -30,6 +30,10 @@ src/
 - `POST /api/strategies`
 - `POST /api/strategies/:strategyId/follows`
 - `GET /api/users/:userId/follows`
+- `GET /api/trigger-jobs`
+- `POST /api/trigger-jobs`
+- `POST /api/trigger-jobs/run-once`
+- `GET /api/execution-logs`
 
 `POST /api/strategies/:strategyId/follows` expects:
 - `userId`
@@ -50,7 +54,7 @@ src/
 
 ### Phase 3: Durable Execution (in progress)
 - `Chunk 3.1`: MongoDB persistence provider + seed + repository abstraction
-- `Chunk 3.2`: Job queue for trigger processing
+- `Chunk 3.2`: Trigger job queue + worker loop + execution logs
 - `Chunk 3.3`: Audit trail + idempotent order lifecycle
 
 ## Run
@@ -71,6 +75,9 @@ Testnet-first defaults:
 - `STORE_PROVIDER=mongodb`
 - `MONGODB_URI=mongodb://127.0.0.1:27017`
 - `MONGODB_DATABASE=edgemarkets`
+- `TRIGGER_WORKER_ENABLED=true`
+- `TRIGGER_WORKER_INTERVAL_MS=6000`
+- `TRIGGER_WORKER_BATCH_SIZE=10`
 
 Extension/web origin defaults:
 - `ALLOWED_ORIGINS=http://localhost:3000,https://polymarket.com,https://*.polymarket.com,chrome-extension://*`

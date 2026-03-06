@@ -10,6 +10,32 @@ const toPort = (value: string | undefined): number => {
   return parsed;
 };
 
+const toPositiveInt = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
+const parseBoolean = (value: string | undefined, fallback: boolean): boolean => {
+  if (!value) {
+    return fallback;
+  }
+
+  if (value === "true" || value === "1") {
+    return true;
+  }
+
+  if (value === "false" || value === "0") {
+    return false;
+  }
+
+  return fallback;
+};
+
 const splitCsv = (value: string | undefined, fallback: string[]): string[] => {
   if (!value) {
     return fallback;
@@ -49,5 +75,9 @@ export const env = {
   executionMode: parseExecutionMode(process.env.EXECUTION_MODE),
   storeProvider: parseStoreProvider(process.env.STORE_PROVIDER),
   mongodbUri: process.env.MONGODB_URI ?? "mongodb://127.0.0.1:27017",
-  mongodbDatabase: process.env.MONGODB_DATABASE ?? "edgemarkets"
+  mongodbDatabase: process.env.MONGODB_DATABASE ?? "edgemarkets",
+  triggerWorkerEnabled: parseBoolean(process.env.TRIGGER_WORKER_ENABLED, true),
+  triggerWorkerIntervalMs: toPositiveInt(process.env.TRIGGER_WORKER_INTERVAL_MS, 6000),
+  triggerWorkerBatchSize: toPositiveInt(process.env.TRIGGER_WORKER_BATCH_SIZE, 10),
+  triggerWorkerRetryDelayMs: toPositiveInt(process.env.TRIGGER_WORKER_RETRY_DELAY_MS, 15000)
 };

@@ -6,6 +6,8 @@ import { registerHealthRoute } from "./routes/healthRoute.js";
 import { registerMarketRoutes } from "./routes/marketRoutes.js";
 import { registerRuntimeRoutes } from "./routes/runtimeRoutes.js";
 import { registerStrategyRoutes } from "./routes/strategyRoutes.js";
+import { registerTriggerJobRoutes } from "./routes/triggerJobRoutes.js";
+import { startTriggerWorker, stopTriggerWorker } from "./services/triggerWorker.js";
 
 export const buildApp = async (): Promise<FastifyInstance> => {
   const app = Fastify({
@@ -30,8 +32,12 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   await registerMarketRoutes(app);
   await registerRuntimeRoutes(app);
   await registerStrategyRoutes(app);
+  await registerTriggerJobRoutes(app);
+
+  startTriggerWorker(app.log);
 
   app.addHook("onClose", async () => {
+    stopTriggerWorker(app.log);
     await closeStore();
   });
 

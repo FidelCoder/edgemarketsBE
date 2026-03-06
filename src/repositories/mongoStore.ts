@@ -1,9 +1,14 @@
-import { MongoClient, Db, Collection } from "mongodb";
+import { Collection, Db, MongoClient } from "mongodb";
 import {
+  CreateExecutionLogInput,
+  CreateTriggerJobInput,
+  ExecutionLog,
   Follow,
   Market,
   StablecoinAsset,
-  Strategy
+  Strategy,
+  TriggerJob,
+  TriggerJobQuery
 } from "../domain/types.js";
 import { createId } from "../utils/id.js";
 import { DataStore } from "./dataStore.js";
@@ -18,6 +23,8 @@ interface StoreCollections {
   strategies: Collection<Strategy>;
   follows: Collection<Follow>;
   stablecoins: Collection<StablecoinAsset>;
+  triggerJobs: Collection<TriggerJob>;
+  executionLogs: Collection<ExecutionLog>;
 }
 
 const nowIso = (): string => new Date().toISOString();
@@ -46,7 +53,11 @@ export class MongoStore implements DataStore {
       collections.strategies.createIndex({ id: 1 }, { unique: true }),
       collections.follows.createIndex({ id: 1 }, { unique: true }),
       collections.follows.createIndex({ userId: 1, strategyId: 1 }, { unique: true }),
-      collections.stablecoins.createIndex({ symbol: 1 }, { unique: true })
+      collections.stablecoins.createIndex({ symbol: 1 }, { unique: true }),
+      collections.triggerJobs.createIndex({ id: 1 }, { unique: true }),
+      collections.triggerJobs.createIndex({ status: 1, nextRunAt: 1 }),
+      collections.executionLogs.createIndex({ id: 1 }, { unique: true }),
+      collections.executionLogs.createIndex({ userId: 1, createdAt: -1 })
     ]);
 
     await this.seedIfEmpty();
@@ -138,6 +149,162 @@ export class MongoStore implements DataStore {
     return created;
   }
 
+  public async listTriggerJobs(query?: TriggerJobQuery): Promise<TriggerJob[]> {
+    const filter: Record<string, string> = {};
+
+    if (query?.status) {
+      filter.status = query.status;
+    }
+
+    if (query?.userId) {
+      filter.userId = query.userId;
+    }
+
+    return this.getCollections()
+      .triggerJobs
+      .find(filter, { projection: { _id: 0 } })
+      .sort(sortByCreatedAtDesc)
+      .toArray();
+  }
+
+  public async createTriggerJob(payload: CreateTriggerJobInput): Promise<TriggerJob> {
+    const timestamp = nowIso();
+
+    const created: TriggerJob = {
+      id: createId(),
+      strategyId: payload.strategyId,
+      userId: payload.userId,
+      fundingStablecoin: payload.fundingStablecoin,
+      allocationUsd: payload.allocationUsd,
+      status: "pending",
+      attemptCount: 0,
+      maxAttempts: payload.maxAttempts ?? 3,
+      nextRunAt: timestamp,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    await this.getCollections().triggerJobs.insertOne(created);
+
+    return created;
+  }
+
+  public async claimNextTriggerJob(nowTimestampIso: string): Promise<TriggerJob | undefined> {
+    const collections = this.getCollections();
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const candidate = await collections.triggerJobs.findOne(
+        { status: "pending", nextRunAt: { $lte: nowTimestampIso } },
+        {
+          sort: { nextRunAt: 1, createdAt: 1 },
+          projection: { _id: 0 }
+        }
+      );
+
+      if (!candidate) {
+        return undefined;
+      }
+
+      const result = await collections.triggerJobs.findOneAndUpdate(
+        { id: candidate.id, status: "pending" },
+        {
+          $set: {
+            status: "processing",
+            updatedAt: nowIso()
+          },
+          $inc: {
+            attemptCount: 1
+          }
+        },
+        {
+          projection: { _id: 0 },
+          returnDocument: "after"
+        }
+      );
+
+      const claimed = this.extractFindOneAndUpdateResult<TriggerJob>(result);
+
+      if (claimed) {
+        return claimed;
+      }
+    }
+
+    return undefined;
+  }
+
+  public async completeTriggerJob(jobId: string): Promise<TriggerJob | undefined> {
+    const result = await this.getCollections().triggerJobs.findOneAndUpdate(
+      { id: jobId },
+      {
+        $set: {
+          status: "completed",
+          updatedAt: nowIso()
+        },
+        $unset: {
+          lastError: ""
+        }
+      },
+      {
+        projection: { _id: 0 },
+        returnDocument: "after"
+      }
+    );
+
+    return this.extractFindOneAndUpdateResult<TriggerJob>(result) ?? undefined;
+  }
+
+  public async failTriggerJob(
+    jobId: string,
+    errorMessage: string,
+    retryAtIso?: string
+  ): Promise<TriggerJob | undefined> {
+    const nextStatus = retryAtIso ? "pending" : "failed";
+    const setValues: Partial<TriggerJob> = {
+      status: nextStatus,
+      updatedAt: nowIso(),
+      lastError: errorMessage
+    };
+
+    if (retryAtIso) {
+      setValues.nextRunAt = retryAtIso;
+    }
+
+    const result = await this.getCollections().triggerJobs.findOneAndUpdate(
+      { id: jobId },
+      {
+        $set: setValues
+      },
+      {
+        projection: { _id: 0 },
+        returnDocument: "after"
+      }
+    );
+
+    return this.extractFindOneAndUpdateResult<TriggerJob>(result) ?? undefined;
+  }
+
+  public async listExecutionLogs(userId?: string): Promise<ExecutionLog[]> {
+    const filter = userId ? { userId } : {};
+
+    return this.getCollections()
+      .executionLogs
+      .find(filter, { projection: { _id: 0 } })
+      .sort(sortByCreatedAtDesc)
+      .toArray();
+  }
+
+  public async createExecutionLog(payload: CreateExecutionLogInput): Promise<ExecutionLog> {
+    const created: ExecutionLog = {
+      id: createId(),
+      ...payload,
+      createdAt: nowIso()
+    };
+
+    await this.getCollections().executionLogs.insertOne(created);
+
+    return created;
+  }
+
   private getCollections(): StoreCollections {
     if (!this.db) {
       throw new Error("MongoStore is not connected.");
@@ -147,7 +314,9 @@ export class MongoStore implements DataStore {
       markets: this.db.collection<Market>("markets"),
       strategies: this.db.collection<Strategy>("strategies"),
       follows: this.db.collection<Follow>("follows"),
-      stablecoins: this.db.collection<StablecoinAsset>("stablecoins")
+      stablecoins: this.db.collection<StablecoinAsset>("stablecoins"),
+      triggerJobs: this.db.collection<TriggerJob>("trigger_jobs"),
+      executionLogs: this.db.collection<ExecutionLog>("execution_logs")
     };
   }
 
@@ -171,5 +340,17 @@ export class MongoStore implements DataStore {
     if (stablecoinCount === 0) {
       await collections.stablecoins.insertMany(createSeedStablecoins());
     }
+  }
+
+  private extractFindOneAndUpdateResult<T>(result: unknown): T | null {
+    if (!result) {
+      return null;
+    }
+
+    if (typeof result === "object" && "value" in result) {
+      return (result as { value: T | null }).value;
+    }
+
+    return result as T;
   }
 }

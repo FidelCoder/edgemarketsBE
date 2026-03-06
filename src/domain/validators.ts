@@ -31,3 +31,24 @@ export const simulateFollowSchema = z.object({
   allocationUsd: z.number().positive().max(1000000),
   fundingStablecoin: z.enum(["USDC", "USDT", "DAI"])
 });
+
+export const createTriggerJobSchema = z.object({
+  strategyId: z.string().min(2),
+  userId: z.string().min(3).max(64),
+  fundingStablecoin: z.enum(["USDC", "USDT", "DAI"]),
+  allocationUsd: z.number().positive().max(1000000),
+  maxAttempts: z.number().int().min(1).max(10).optional()
+});
+
+export const triggerJobQuerySchema = z.object({
+  status: z.enum(["pending", "processing", "completed", "failed"]).optional(),
+  userId: z.string().min(3).max(64).optional()
+});
+
+export const executionLogQuerySchema = z.object({
+  userId: z.string().min(3).max(64).optional()
+});
+
+export const triggerWorkerRunSchema = z.object({
+  maxJobs: z.number().int().min(1).max(50).optional()
+});

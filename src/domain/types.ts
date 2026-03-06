@@ -12,6 +12,10 @@ export type ExecutionMode = "simulated" | "live";
 
 export type StoreProvider = "mongodb" | "memory";
 
+export type TriggerJobStatus = "pending" | "processing" | "completed" | "failed";
+
+export type TriggerExecutionOutcome = "executed" | "failed" | "rescheduled";
+
 export interface Market {
   id: string;
   question: string;
@@ -82,6 +86,9 @@ export interface RuntimeConfig {
   polymarketEnvironment: string;
   executionMode: ExecutionMode;
   storeProvider: StoreProvider;
+  triggerWorkerEnabled: boolean;
+  triggerWorkerIntervalMs: number;
+  triggerWorkerBatchSize: number;
   supportedStablecoins: StablecoinSymbol[];
 }
 
@@ -102,6 +109,59 @@ export interface SimulateFollowResult {
   estimatedSettlementUsd: number;
   networkMode: NetworkMode;
   executionMode: ExecutionMode;
+}
+
+export interface TriggerJob {
+  id: string;
+  strategyId: string;
+  userId: string;
+  fundingStablecoin: StablecoinSymbol;
+  allocationUsd: number;
+  status: TriggerJobStatus;
+  attemptCount: number;
+  maxAttempts: number;
+  nextRunAt: string;
+  createdAt: string;
+  updatedAt: string;
+  lastError?: string;
+}
+
+export interface CreateTriggerJobInput {
+  strategyId: string;
+  userId: string;
+  fundingStablecoin: StablecoinSymbol;
+  allocationUsd: number;
+  maxAttempts?: number;
+}
+
+export interface TriggerJobQuery {
+  status?: TriggerJobStatus;
+  userId?: string;
+}
+
+export interface ExecutionLog {
+  id: string;
+  jobId: string;
+  strategyId: string;
+  userId: string;
+  outcome: TriggerExecutionOutcome;
+  message: string;
+  createdAt: string;
+}
+
+export interface CreateExecutionLogInput {
+  jobId: string;
+  strategyId: string;
+  userId: string;
+  outcome: TriggerExecutionOutcome;
+  message: string;
+}
+
+export interface TriggerWorkerTickResult {
+  processed: number;
+  completed: number;
+  rescheduled: number;
+  failed: number;
 }
 
 export interface ApiResponse<T> {

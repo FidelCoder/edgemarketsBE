@@ -24,6 +24,9 @@ export const getRuntimeConfig = async (): Promise<RuntimeConfig> => {
     polymarketEnvironment: env.polymarketEnvironment,
     executionMode: env.executionMode,
     storeProvider: env.storeProvider,
+    triggerWorkerEnabled: env.triggerWorkerEnabled,
+    triggerWorkerIntervalMs: env.triggerWorkerIntervalMs,
+    triggerWorkerBatchSize: env.triggerWorkerBatchSize,
     supportedStablecoins: stablecoins.map((asset) => asset.symbol)
   };
 };
