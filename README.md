@@ -83,11 +83,15 @@ Testnet-first defaults:
 - `POLYGON_NETWORK=amoy`
 - `EXECUTION_MODE=simulated`
 - `STORE_PROVIDER=mongodb`
+- `STORE_FALLBACK_TO_MEMORY=true`
 - `MONGODB_URI=mongodb://127.0.0.1:27017`
 - `MONGODB_DATABASE=edgemarkets`
+- `MONGODB_SERVER_SELECTION_TIMEOUT_MS=4000`
 - `TRIGGER_WORKER_ENABLED=true`
 - `TRIGGER_WORKER_INTERVAL_MS=6000`
 - `TRIGGER_WORKER_BATCH_SIZE=10`
+
+If MongoDB is unavailable and `STORE_FALLBACK_TO_MEMORY=true`, the backend auto-falls back to in-memory storage for local dev.
 - `AUTH_HANDOFF_TTL_SECONDS=600`
 
 Extension/web origin defaults:

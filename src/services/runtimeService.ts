@@ -6,7 +6,7 @@ import {
   SimulateFollowResult,
   StablecoinSymbol
 } from "../domain/types.js";
-import { getStore } from "../repositories/storeProvider.js";
+import { getActiveStoreProvider, getStore } from "../repositories/storeProvider.js";
 
 const feeBpsByStablecoin: Record<StablecoinSymbol, number> = {
   USDC: 10,
@@ -23,7 +23,7 @@ export const getRuntimeConfig = async (): Promise<RuntimeConfig> => {
     polygonNetwork: env.polygonNetwork,
     polymarketEnvironment: env.polymarketEnvironment,
     executionMode: env.executionMode,
-    storeProvider: env.storeProvider,
+    storeProvider: getActiveStoreProvider(),
     triggerWorkerEnabled: env.triggerWorkerEnabled,
     triggerWorkerIntervalMs: env.triggerWorkerIntervalMs,
     triggerWorkerBatchSize: env.triggerWorkerBatchSize,

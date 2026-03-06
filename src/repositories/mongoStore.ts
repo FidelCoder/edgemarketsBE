@@ -49,8 +49,10 @@ export class MongoStore implements DataStore {
   private readonly dbName: string;
   private db: Db | null;
 
-  constructor(uri: string, dbName: string) {
-    this.client = new MongoClient(uri);
+  constructor(uri: string, dbName: string, serverSelectionTimeoutMs?: number) {
+    this.client = new MongoClient(uri, {
+      serverSelectionTimeoutMS: serverSelectionTimeoutMs
+    });
     this.dbName = dbName;
     this.db = null;
   }
