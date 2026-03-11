@@ -23,6 +23,7 @@ import {
   TriggerJobQuery
 } from "../domain/types.js";
 import { createId } from "../utils/id.js";
+import { env } from "../config/env.js";
 import { DataStore } from "./dataStore.js";
 import {
   createSeedMarkets,
@@ -573,7 +574,7 @@ export class MongoStore implements DataStore {
       await collections.markets.insertMany(createSeedMarkets());
     }
 
-    if (strategyCount === 0) {
+    if (strategyCount === 0 && env.polymarketMarketSource === "seed") {
       await collections.strategies.insertMany(createSeedStrategies());
     }
 

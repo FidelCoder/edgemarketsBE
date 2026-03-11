@@ -32,6 +32,7 @@ import {
   createSeedStablecoins,
   createSeedStrategies
 } from "./seedData.js";
+import { env } from "../config/env.js";
 
 const nowIso = (): string => new Date().toISOString();
 
@@ -62,7 +63,7 @@ export class InMemoryStore implements DataStore {
 
   constructor() {
     this.markets = createSeedMarkets();
-    this.strategies = createSeedStrategies();
+    this.strategies = env.polymarketMarketSource === "seed" ? createSeedStrategies() : [];
     this.follows = [];
     this.stablecoins = createSeedStablecoins();
     this.triggerJobs = [];

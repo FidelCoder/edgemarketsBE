@@ -11,12 +11,12 @@ import { createAuditLog } from "./auditService.js";
 import { getMarketById } from "./polymarketService.js";
 
 const enrichStrategies = async (strategies: Strategy[]): Promise<StrategyWithMarket[]> => {
-  return Promise.all(
+  const enriched = await Promise.all(
     strategies.map(async (strategy) => {
       const market = await getMarketById(strategy.marketId);
 
       if (!market) {
-        throw new AppError(`Market not found for strategy ${strategy.id}.`, 500);
+        return null;
       }
 
       return {
@@ -25,6 +25,8 @@ const enrichStrategies = async (strategies: Strategy[]): Promise<StrategyWithMar
       };
     })
   );
+
+  return enriched.filter((strategy): strategy is StrategyWithMarket => Boolean(strategy));
 };
 
 export const listStrategies = async (): Promise<StrategyWithMarket[]> => {

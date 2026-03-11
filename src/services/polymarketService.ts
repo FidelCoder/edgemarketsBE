@@ -158,7 +158,7 @@ export const listMarkets = async (): Promise<Market[]> => {
     };
     return liveMarkets;
   } catch {
-    return getSeedMarkets();
+    return marketCache?.markets ?? [];
   }
 };
 
