@@ -14,7 +14,14 @@ export const createSeedMarkets = (): Market[] => [
     yesPrice: 0.47,
     noPrice: 0.53,
     liquidityUsd: 2400000,
-    updatedAt: nowIso()
+    updatedAt: nowIso(),
+    slug: "democrat-win-2028-presidential-election",
+    icon: null,
+    endDate: null,
+    yesTokenId: "seed_yes_market_us_election_2028",
+    noTokenId: "seed_no_market_us_election_2028",
+    orderBookEnabled: false,
+    negRisk: false
   },
   {
     id: "market-fed-cut-june-2026",
@@ -23,7 +30,14 @@ export const createSeedMarkets = (): Market[] => [
     yesPrice: 0.63,
     noPrice: 0.37,
     liquidityUsd: 1800000,
-    updatedAt: nowIso()
+    updatedAt: nowIso(),
+    slug: "fed-cut-before-july-2026",
+    icon: null,
+    endDate: null,
+    yesTokenId: "seed_yes_market_fed_cut_june_2026",
+    noTokenId: "seed_no_market_fed_cut_june_2026",
+    orderBookEnabled: false,
+    negRisk: false
   },
   {
     id: "market-btc-100k-2026",
@@ -32,7 +46,14 @@ export const createSeedMarkets = (): Market[] => [
     yesPrice: 0.41,
     noPrice: 0.59,
     liquidityUsd: 1200000,
-    updatedAt: nowIso()
+    updatedAt: nowIso(),
+    slug: "btc-touch-100k-before-dec-31-2026",
+    icon: null,
+    endDate: null,
+    yesTokenId: "seed_yes_market_btc_100k_2026",
+    noTokenId: "seed_no_market_btc_100k_2026",
+    orderBookEnabled: false,
+    negRisk: false
   }
 ];
 

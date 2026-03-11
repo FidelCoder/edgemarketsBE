@@ -10,6 +10,7 @@ import {
 import {
   createStrategy,
   followStrategy,
+  getStrategyWithMarket,
   listStrategies,
   listUserFollows
 } from "../services/strategyService.js";
@@ -22,6 +23,19 @@ export const registerStrategyRoutes = async (app: FastifyInstance): Promise<void
   app.get("/api/strategies", async () => {
     return {
       data: await listStrategies(),
+      error: null
+    };
+  });
+
+  app.get("/api/strategies/:strategyId", async (request) => {
+    const parsedParams = strategyParamsSchema.safeParse(request.params);
+
+    if (!parsedParams.success) {
+      throw new AppError(parsedParams.error.errors[0]?.message ?? "Invalid strategy params.", 400);
+    }
+
+    return {
+      data: await getStrategyWithMarket(parsedParams.data.strategyId),
       error: null
     };
   });

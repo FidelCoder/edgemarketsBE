@@ -1,11 +1,14 @@
 import cors from "@fastify/cors";
 import Fastify, { FastifyInstance } from "fastify";
 import { isAllowedOrigin } from "./config/cors.js";
+import { env } from "./config/env.js";
 import { closeStore, initializeStore } from "./repositories/storeProvider.js";
 import { registerAuditRoutes } from "./routes/auditRoutes.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { registerHealthRoute } from "./routes/healthRoute.js";
 import { registerMarketRoutes } from "./routes/marketRoutes.js";
+import { registerOrderRoutes } from "./routes/orderRoutes.js";
+import { registerPolymarketRoutes } from "./routes/polymarketRoutes.js";
 import { registerRuntimeRoutes } from "./routes/runtimeRoutes.js";
 import { registerStrategyRoutes } from "./routes/strategyRoutes.js";
 import { registerTriggerJobRoutes } from "./routes/triggerJobRoutes.js";
@@ -32,13 +35,17 @@ export const buildApp = async (): Promise<FastifyInstance> => {
 
   await registerHealthRoute(app);
   await registerMarketRoutes(app);
+  await registerPolymarketRoutes(app);
   await registerAuthRoutes(app);
   await registerRuntimeRoutes(app);
   await registerStrategyRoutes(app);
   await registerTriggerJobRoutes(app);
+  await registerOrderRoutes(app);
   await registerAuditRoutes(app);
 
-  startTriggerWorker(app.log);
+  if (env.triggerWorkerEnabled) {
+    startTriggerWorker(app.log);
+  }
 
   app.addHook("onClose", async () => {
     stopTriggerWorker(app.log);

@@ -28,7 +28,23 @@ export type AuditEntityType =
   | "idempotency"
   | "worker"
   | "session"
-  | "handoff";
+  | "handoff"
+  | "order";
+
+export interface ApiResponse<T> {
+  data: T | null;
+  error: {
+    message: string;
+  } | null;
+}
+
+export type OrderLifecycleStatus = "submitted" | "open" | "filled" | "failed" | "retried";
+
+export type PolymarketOrderSide = "BUY" | "SELL";
+
+export type PolymarketOrderType = "GTC" | "FOK" | "GTD" | "FAK";
+
+export type PolymarketTradeStatus = "MATCHED" | "MINED" | "CONFIRMED" | "RETRYING" | "FAILED" | "UNKNOWN";
 
 export interface Market {
   id: string;
@@ -38,6 +54,13 @@ export interface Market {
   noPrice: number;
   liquidityUsd: number;
   updatedAt: string;
+  slug: string;
+  icon: string | null;
+  endDate: string | null;
+  yesTokenId: string;
+  noTokenId: string;
+  orderBookEnabled: boolean;
+  negRisk: boolean;
 }
 
 export interface Strategy {
@@ -98,6 +121,10 @@ export interface RuntimeConfig {
   networkMode: NetworkMode;
   polygonNetwork: string;
   polymarketEnvironment: string;
+  polymarketHost: string;
+  polymarketGammaHost: string;
+  polymarketChainId: number;
+  polymarketMarketSource: "live" | "seed";
   executionMode: ExecutionMode;
   storeProvider: StoreProvider;
   triggerWorkerEnabled: boolean;
@@ -240,6 +267,30 @@ export interface CreateAuthSessionInput {
   linkedSessionId?: string;
 }
 
+export interface AuthChallenge {
+  id: string;
+  walletAddress: string;
+  client: AuthClient;
+  nonce: string;
+  message: string;
+  issuedAt: string;
+  expiresAt: string;
+  consumedAt?: string;
+}
+
+export interface CreateAuthChallengeInput {
+  walletAddress: string;
+  client: AuthClient;
+  origin?: string;
+}
+
+export interface VerifyAuthChallengeInput {
+  challengeId: string;
+  walletAddress: string;
+  signature: string;
+  client: AuthClient;
+}
+
 export interface SessionHandoff {
   id: string;
   code: string;
@@ -259,18 +310,80 @@ export interface CreateSessionHandoffInput {
   expiresAt: string;
 }
 
-export interface CreateAuthSessionApiInput {
+export interface PolymarketPublicProfile {
   walletAddress: string;
-  client?: AuthClient;
+  proxyWalletAddress: string | null;
+  username: string | null;
+  pseudonym: string | null;
+  profileImage: string | null;
 }
 
-export interface ConsumeSessionHandoffInput {
-  handoffCode: string;
+export interface OrderRecord {
+  id: string;
+  polymarketOrderId: string;
+  strategyId: string;
+  creatorHandle: string;
+  marketId: string;
+  userId: string;
+  walletAddress: string;
+  funderAddress: string;
+  tokenId: string;
+  outcome: "YES" | "NO";
+  action: ActionType;
+  side: PolymarketOrderSide;
+  orderType: PolymarketOrderType;
+  price: number;
+  size: number;
+  amountUsd: number;
+  status: OrderLifecycleStatus;
+  tradeStatus: PolymarketTradeStatus;
+  transactionHashes: string[];
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+  filledAt?: string;
 }
 
-export interface ApiResponse<T> {
-  data: T | null;
-  error: {
-    message: string;
-  } | null;
+export interface CreateOrderRecordInput {
+  polymarketOrderId: string;
+  strategyId: string;
+  creatorHandle: string;
+  marketId: string;
+  userId: string;
+  walletAddress: string;
+  funderAddress: string;
+  tokenId: string;
+  outcome: "YES" | "NO";
+  action: ActionType;
+  side: PolymarketOrderSide;
+  orderType: PolymarketOrderType;
+  price: number;
+  size: number;
+  amountUsd: number;
+  status: OrderLifecycleStatus;
+  tradeStatus: PolymarketTradeStatus;
+  transactionHashes?: string[];
+  errorMessage?: string;
+  filledAt?: string;
+}
+
+export interface OrderRecordQuery {
+  strategyId?: string;
+  creatorHandle?: string;
+  status?: OrderLifecycleStatus;
+  limit?: number;
+}
+
+export interface CreatorPerformanceSummary {
+  creatorHandle: string;
+  strategyCount: number;
+  totalFollowers: number;
+  totalOrders: number;
+  openOrders: number;
+  filledOrders: number;
+  failedOrders: number;
+  retriedOrders: number;
+  totalVolumeUsd: number;
+  fillRate: number;
+  latestOrderAt?: string;
 }

@@ -8,13 +8,12 @@ import {
 } from "../domain/types.js";
 import { getStore } from "../repositories/storeProvider.js";
 import { createAuditLog } from "./auditService.js";
+import { getMarketById } from "./polymarketService.js";
 
 const enrichStrategies = async (strategies: Strategy[]): Promise<StrategyWithMarket[]> => {
-  const store = getStore();
-
   return Promise.all(
     strategies.map(async (strategy) => {
-      const market = await store.getMarketById(strategy.marketId);
+      const market = await getMarketById(strategy.marketId);
 
       if (!market) {
         throw new AppError(`Market not found for strategy ${strategy.id}.`, 500);
@@ -35,9 +34,29 @@ export const listStrategies = async (): Promise<StrategyWithMarket[]> => {
   return enrichStrategies(strategies);
 };
 
+export const getStrategyWithMarket = async (strategyId: string): Promise<StrategyWithMarket> => {
+  const store = getStore();
+  const strategy = await store.getStrategyById(strategyId);
+
+  if (!strategy) {
+    throw new AppError("Strategy not found.", 404);
+  }
+
+  const market = await getMarketById(strategy.marketId);
+
+  if (!market) {
+    throw new AppError("The selected market does not exist.", 404);
+  }
+
+  return {
+    ...strategy,
+    market
+  };
+};
+
 export const createStrategy = async (payload: CreateStrategyInput): Promise<StrategyWithMarket> => {
   const store = getStore();
-  const market = await store.getMarketById(payload.marketId);
+  const market = await getMarketById(payload.marketId);
 
   if (!market) {
     throw new AppError("The selected market does not exist.", 404);
@@ -113,7 +132,7 @@ export const followStrategy = async (
   });
 
   const updatedStrategy = await store.getStrategyById(strategyId);
-  const market = await store.getMarketById(strategy.marketId);
+  const market = await getMarketById(strategy.marketId);
 
   if (!updatedStrategy || !market) {
     throw new AppError("Could not load updated strategy after follow.", 500);

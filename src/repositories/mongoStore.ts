@@ -7,12 +7,15 @@ import {
   CreateAuditLogInput,
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
+  CreateOrderRecordInput,
   CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
   IdempotencyRecord,
   Market,
+  OrderRecord,
+  OrderRecordQuery,
   SessionHandoff,
   StablecoinAsset,
   Strategy,
@@ -38,11 +41,13 @@ interface StoreCollections {
   idempotencyRecords: Collection<IdempotencyRecord>;
   authSessions: Collection<AuthSession>;
   sessionHandoffs: Collection<SessionHandoff>;
+  orderRecords: Collection<OrderRecord>;
 }
 
 const nowIso = (): string => new Date().toISOString();
 
 const sortByCreatedAtDesc = { createdAt: -1 } as const;
+const sortByUpdatedAtDesc = { updatedAt: -1 } as const;
 
 export class MongoStore implements DataStore {
   private readonly client: MongoClient;
@@ -82,7 +87,12 @@ export class MongoStore implements DataStore {
       collections.authSessions.createIndex({ walletAddress: 1, client: 1, createdAt: -1 }),
       collections.sessionHandoffs.createIndex({ id: 1 }, { unique: true }),
       collections.sessionHandoffs.createIndex({ code: 1 }, { unique: true }),
-      collections.sessionHandoffs.createIndex({ expiresAt: 1 })
+      collections.sessionHandoffs.createIndex({ expiresAt: 1 }),
+      collections.orderRecords.createIndex({ id: 1 }, { unique: true }),
+      collections.orderRecords.createIndex({ polymarketOrderId: 1 }, { unique: true }),
+      collections.orderRecords.createIndex({ userId: 1, updatedAt: -1 }),
+      collections.orderRecords.createIndex({ strategyId: 1, updatedAt: -1 }),
+      collections.orderRecords.createIndex({ creatorHandle: 1, updatedAt: -1 })
     ]);
 
     await this.seedIfEmpty();
@@ -464,6 +474,72 @@ export class MongoStore implements DataStore {
     return this.extractFindOneAndUpdateResult<SessionHandoff>(result) ?? undefined;
   }
 
+  public async upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord> {
+    const timestamp = nowIso();
+    const existing = await this.getOrderRecordByPolymarketOrderId(payload.polymarketOrderId);
+
+    if (existing) {
+      const updated: OrderRecord = {
+        ...existing,
+        ...payload,
+        transactionHashes: payload.transactionHashes ?? existing.transactionHashes,
+        errorMessage: payload.errorMessage,
+        filledAt: payload.filledAt ?? existing.filledAt,
+        updatedAt: timestamp
+      };
+
+      await this.getCollections().orderRecords.updateOne(
+        { polymarketOrderId: payload.polymarketOrderId },
+        { $set: updated }
+      );
+
+      return updated;
+    }
+
+    const created: OrderRecord = {
+      id: createId(),
+      ...payload,
+      transactionHashes: payload.transactionHashes ?? [],
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    await this.getCollections().orderRecords.insertOne(created);
+    return created;
+  }
+
+  public async listOrderRecords(query?: OrderRecordQuery): Promise<OrderRecord[]> {
+    const filter: Record<string, string> = {};
+
+    if (query?.strategyId) {
+      filter.strategyId = query.strategyId;
+    }
+
+    if (query?.creatorHandle) {
+      filter.creatorHandle = query.creatorHandle;
+    }
+
+    if (query?.status) {
+      filter.status = query.status;
+    }
+
+    const limit = query?.limit ?? 100;
+
+    return this.getCollections()
+      .orderRecords
+      .find(filter, { projection: { _id: 0 } })
+      .sort(sortByUpdatedAtDesc)
+      .limit(limit)
+      .toArray();
+  }
+
+  public async getOrderRecordByPolymarketOrderId(polymarketOrderId: string): Promise<OrderRecord | undefined> {
+    return this.getCollections().orderRecords.findOne(
+      { polymarketOrderId },
+      { projection: { _id: 0 } }
+    ) as Promise<OrderRecord | undefined>;
+  }
+
   private getCollections(): StoreCollections {
     if (!this.db) {
       throw new Error("MongoStore is not connected.");
@@ -479,7 +555,8 @@ export class MongoStore implements DataStore {
       auditLogs: this.db.collection<AuditLog>("audit_logs"),
       idempotencyRecords: this.db.collection<IdempotencyRecord>("idempotency_records"),
       authSessions: this.db.collection<AuthSession>("auth_sessions"),
-      sessionHandoffs: this.db.collection<SessionHandoff>("session_handoffs")
+      sessionHandoffs: this.db.collection<SessionHandoff>("session_handoffs"),
+      orderRecords: this.db.collection<OrderRecord>("order_records")
     };
   }
 

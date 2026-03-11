@@ -6,12 +6,15 @@ import {
   CreateAuditLogInput,
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
+  CreateOrderRecordInput,
   CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
   IdempotencyRecord,
   Market,
+  OrderRecord,
+  OrderRecordQuery,
   SessionHandoff,
   StablecoinAsset,
   Strategy,
@@ -47,4 +50,7 @@ export interface DataStore {
   updateAuthSessionLastActive(token: string): Promise<AuthSession | undefined>;
   createSessionHandoff(payload: CreateSessionHandoffInput): Promise<SessionHandoff>;
   consumeSessionHandoff(code: string, consumedAtIso: string): Promise<SessionHandoff | undefined>;
+  upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord>;
+  listOrderRecords(query?: OrderRecordQuery): Promise<OrderRecord[]>;
+  getOrderRecordByPolymarketOrderId(polymarketOrderId: string): Promise<OrderRecord | undefined>;
 }

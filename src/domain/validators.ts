@@ -8,7 +8,7 @@ export const createStrategySchema = z.object({
   conditionValue: z.number().positive(),
   action: z.enum(["buy_yes", "buy_no", "sell_yes", "sell_no"]),
   allocationUsd: z.number().positive().max(1000000),
-  creatorHandle: z.string().min(2).max(24)
+  creatorHandle: z.string().min(2).max(24).regex(/^[a-zA-Z0-9_]+$/)
 });
 
 export const followStrategySchema = z.object({
@@ -20,6 +20,14 @@ export const followStrategySchema = z.object({
 
 export const userParamsSchema = z.object({
   userId: z.string().min(3).max(64)
+});
+
+export const creatorParamsSchema = z.object({
+  creatorHandle: z.string().min(2).max(24).regex(/^[a-zA-Z0-9_]+$/)
+});
+
+export const walletAddressParamsSchema = z.object({
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/)
 });
 
 export const strategyParamsSchema = z.object({
@@ -56,16 +64,57 @@ export const triggerWorkerRunSchema = z.object({
 export const auditLogQuerySchema = z.object({
   actorId: z.string().min(3).max(64).optional(),
   entityType: z
-    .enum(["strategy", "follow", "trigger_job", "execution_log", "idempotency", "worker", "session", "handoff"])
+    .enum(["strategy", "follow", "trigger_job", "execution_log", "idempotency", "worker", "session", "handoff", "order"])
     .optional(),
   limit: z.coerce.number().int().min(1).max(200).optional()
 });
 
-export const createAuthSessionSchema = z.object({
+export const createAuthChallengeSchema = z.object({
   walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  client: z.enum(["web", "extension"]).optional()
+});
+
+export const verifyAuthChallengeSchema = z.object({
+  challengeId: z.string().min(2),
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  signature: z.string().regex(/^0x[a-fA-F0-9]{130}$/),
   client: z.enum(["web", "extension"]).optional()
 });
 
 export const consumeHandoffSchema = z.object({
   handoffCode: z.string().regex(/^EM-[A-Z0-9]{8}$/)
+});
+
+export const orderLifecycleStatusSchema = z.enum(["submitted", "open", "filled", "failed", "retried"]);
+
+export const tradeStatusSchema = z.enum(["MATCHED", "MINED", "CONFIRMED", "RETRYING", "FAILED", "UNKNOWN"]);
+
+export const createOrderRecordSchema = z.object({
+  polymarketOrderId: z.string().min(2),
+  strategyId: z.string().min(2),
+  creatorHandle: z.string().min(2).max(24).regex(/^[a-zA-Z0-9_]+$/),
+  marketId: z.string().min(2),
+  userId: z.string().min(3).max(64),
+  walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  funderAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  tokenId: z.string().min(2),
+  outcome: z.enum(["YES", "NO"]),
+  action: z.enum(["buy_yes", "buy_no", "sell_yes", "sell_no"]),
+  side: z.enum(["BUY", "SELL"]),
+  orderType: z.enum(["GTC", "FOK", "GTD", "FAK"]),
+  price: z.number().positive().max(1),
+  size: z.number().positive().max(1000000000),
+  amountUsd: z.number().positive().max(1000000),
+  status: orderLifecycleStatusSchema,
+  tradeStatus: tradeStatusSchema,
+  transactionHashes: z.array(z.string().min(1)).max(10).optional(),
+  errorMessage: z.string().max(500).optional(),
+  filledAt: z.string().datetime().optional()
+});
+
+export const orderQuerySchema = z.object({
+  strategyId: z.string().min(2).optional(),
+  creatorHandle: z.string().min(2).max(24).regex(/^[a-zA-Z0-9_]+$/).optional(),
+  status: orderLifecycleStatusSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional()
 });

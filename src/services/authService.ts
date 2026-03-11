@@ -1,11 +1,15 @@
 import { randomBytes } from "node:crypto";
+import { utils as ethersUtils } from "ethers";
 import { env } from "../config/env.js";
 import { AppError } from "../domain/errors.js";
 import {
+  AuthChallenge,
   AuthSession,
-  CreateAuthSessionApiInput,
+  CreateAuthChallengeInput,
+  CreateAuthSessionInput,
   CreateSessionHandoffInput,
-  SessionHandoff
+  SessionHandoff,
+  VerifyAuthChallengeInput
 } from "../domain/types.js";
 import { getStore } from "../repositories/storeProvider.js";
 import { createAuditLog } from "./auditService.js";
@@ -19,12 +23,25 @@ const isDuplicateError = (error: unknown): boolean => {
   return (error as { code?: number } | null)?.code === 11000;
 };
 
+const challenges = new Map<string, AuthChallenge>();
+
+const nowIso = (): string => new Date().toISOString();
+
 const createHandoffCode = (): string => {
   return `EM-${randomBytes(4).toString("hex").toUpperCase()}`;
 };
 
+const createNonce = (): string => {
+  return randomBytes(16).toString("hex");
+};
+
 const getHandoffExpiryIso = (): string => {
   const expiresAt = Date.now() + env.authHandoffTtlSeconds * 1000;
+  return new Date(expiresAt).toISOString();
+};
+
+const getChallengeExpiryIso = (): string => {
+  const expiresAt = Date.now() + env.authChallengeTtlSeconds * 1000;
   return new Date(expiresAt).toISOString();
 };
 
@@ -40,6 +57,34 @@ const extractBearerToken = (authorizationHeader: string | undefined): string => 
   }
 
   return token.trim();
+};
+
+const buildChallengeMessage = (challenge: AuthChallenge, origin?: string): string => {
+  const resourceOrigin = origin?.trim() || `https://${env.authMessageDomain}`;
+
+  return [
+    `EdgeMarkets wants you to sign in with your wallet:`,
+    challenge.walletAddress,
+    "",
+    "Sign this message to authenticate and enable live Polymarket trading from EdgeMarkets.",
+    `URI: ${resourceOrigin}`,
+    "Version: 1",
+    `Chain ID: ${env.polymarketChainId}`,
+    `Nonce: ${challenge.nonce}`,
+    `Issued At: ${challenge.issuedAt}`,
+    `Expiration Time: ${challenge.expiresAt}`,
+    `Request ID: ${challenge.id}`
+  ].join("\n");
+};
+
+const pruneExpiredChallenges = (): void => {
+  const currentIso = nowIso();
+
+  for (const [challengeId, challenge] of challenges.entries()) {
+    if (challenge.expiresAt <= currentIso || challenge.consumedAt) {
+      challenges.delete(challengeId);
+    }
+  }
 };
 
 const createUniqueSessionHandoff = async (
@@ -63,11 +108,12 @@ const createUniqueSessionHandoff = async (
   throw new AppError("Could not generate unique handoff code.", 500);
 };
 
-export const startAuthSession = async (payload: CreateAuthSessionApiInput): Promise<AuthSession> => {
+const startAuthSession = async (payload: CreateAuthSessionInput): Promise<AuthSession> => {
   const store = getStore();
   const created = await store.createAuthSession({
     walletAddress: payload.walletAddress.toLowerCase(),
-    client: payload.client ?? "web"
+    client: payload.client,
+    linkedSessionId: payload.linkedSessionId
   });
 
   await createAuditLog({
@@ -78,11 +124,88 @@ export const startAuthSession = async (payload: CreateAuthSessionApiInput): Prom
     entityId: created.id,
     metadata: {
       client: created.client,
-      walletAddress: created.walletAddress
+      walletAddress: created.walletAddress,
+      linkedSessionId: created.linkedSessionId
     }
   });
 
   return created;
+};
+
+export const createAuthChallenge = async (payload: CreateAuthChallengeInput): Promise<AuthChallenge> => {
+  pruneExpiredChallenges();
+
+  const challenge: AuthChallenge = {
+    id: `chal_${randomBytes(8).toString("hex")}`,
+    walletAddress: payload.walletAddress.toLowerCase(),
+    client: payload.client,
+    nonce: createNonce(),
+    message: "",
+    issuedAt: nowIso(),
+    expiresAt: getChallengeExpiryIso()
+  };
+
+  const message = buildChallengeMessage(challenge, payload.origin);
+  const created: AuthChallenge = {
+    ...challenge,
+    message
+  };
+
+  challenges.set(created.id, created);
+  return created;
+};
+
+export const verifyAuthChallenge = async (payload: VerifyAuthChallengeInput): Promise<AuthSession> => {
+  pruneExpiredChallenges();
+
+  const challenge = challenges.get(payload.challengeId);
+
+  if (!challenge) {
+    throw new AppError("Auth challenge not found or expired.", 404);
+  }
+
+  if (challenge.consumedAt) {
+    throw new AppError("Auth challenge has already been used.", 409);
+  }
+
+  if (challenge.expiresAt <= nowIso()) {
+    challenges.delete(challenge.id);
+    throw new AppError("Auth challenge has expired.", 401);
+  }
+
+  if (challenge.walletAddress !== payload.walletAddress.toLowerCase()) {
+    throw new AppError("Challenge wallet does not match verification wallet.", 400);
+  }
+
+  const recoveredAddress = ethersUtils.verifyMessage(challenge.message, payload.signature).toLowerCase();
+
+  if (recoveredAddress !== challenge.walletAddress) {
+    throw new AppError("Wallet signature could not be verified.", 401);
+  }
+
+  const consumedAt = nowIso();
+  challenges.set(challenge.id, {
+    ...challenge,
+    consumedAt
+  });
+
+  await createAuditLog({
+    action: "session.challenge_verified",
+    actorType: "user",
+    actorId: `wallet:${challenge.walletAddress}`,
+    entityType: "session",
+    entityId: challenge.id,
+    metadata: {
+      client: payload.client,
+      recoveredAddress,
+      consumedAt
+    }
+  });
+
+  return startAuthSession({
+    walletAddress: challenge.walletAddress,
+    client: payload.client
+  });
 };
 
 export const getCurrentSession = async (authorizationHeader: string | undefined): Promise<AuthSession> => {
@@ -133,14 +256,14 @@ export const createSessionHandoff = async (
 
 export const consumeSessionHandoff = async (handoffCode: string): Promise<AuthSession> => {
   const store = getStore();
-  const consumedAtIso = new Date().toISOString();
+  const consumedAtIso = nowIso();
   const handoff = await store.consumeSessionHandoff(handoffCode, consumedAtIso);
 
   if (!handoff) {
     throw new AppError("Handoff code is invalid, expired, or already used.", 404);
   }
 
-  const extensionSession = await store.createAuthSession({
+  const extensionSession = await startAuthSession({
     walletAddress: handoff.walletAddress,
     client: "extension",
     linkedSessionId: handoff.sourceSessionId
@@ -155,18 +278,6 @@ export const consumeSessionHandoff = async (handoffCode: string): Promise<AuthSe
     metadata: {
       extensionSessionId: extensionSession.id,
       consumedAt: consumedAtIso
-    }
-  });
-
-  await createAuditLog({
-    action: "session.created",
-    actorType: "user",
-    actorId: extensionSession.userId,
-    entityType: "session",
-    entityId: extensionSession.id,
-    metadata: {
-      client: extensionSession.client,
-      linkedSessionId: extensionSession.linkedSessionId
     }
   });
 

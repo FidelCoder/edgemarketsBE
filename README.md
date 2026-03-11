@@ -1,98 +1,62 @@
 # EdgeMarkets Backend
 
-TypeScript backend for EdgeMarkets strategy marketplace MVP.
+Fastify + TypeScript backend for EdgeMarkets live Polymarket execution.
 
-## Stack
-- Fastify
-- TypeScript (`strict`)
-- MongoDB (default persistence provider)
+## What is implemented
+- Live Polymarket market ingestion from Gamma API with seed fallback.
+- Real signed wallet auth via challenge + signature verification.
+- Web-to-extension session handoff.
+- Strategy, follow, trigger-job, audit-log, and order-history APIs.
+- Persisted live order lifecycle records: `submitted`, `open`, `filled`, `failed`, `retried`.
+- Creator performance and strategy history endpoints.
+- MongoDB primary store with automatic memory fallback for local dev.
+- Dockerfile and GitHub Actions CI.
 
-## Structure
-```txt
-src/
-  app.ts
-  index.ts
-  config/
-  domain/
-  repositories/
-  routes/
-  services/
-  utils/
-```
-
-## Features
-- `GET /api/health`
+## Key routes
 - `GET /api/markets`
-- `GET /api/stablecoins`
-- `POST /api/auth/sessions`
+- `GET /api/polymarket/profile/:walletAddress`
+- `POST /api/auth/challenge`
+- `POST /api/auth/verify`
 - `GET /api/auth/sessions/me`
 - `POST /api/auth/handoff/request`
 - `POST /api/auth/handoff/consume`
 - `GET /api/runtime/config`
-- `POST /api/runtime/simulate-follow`
 - `GET /api/strategies`
+- `GET /api/strategies/:strategyId`
 - `POST /api/strategies`
 - `POST /api/strategies/:strategyId/follows`
+- `GET /api/strategies/:strategyId/history`
 - `GET /api/users/:userId/follows`
+- `GET /api/orders`
+- `POST /api/orders`
+- `GET /api/creators/:creatorHandle/performance`
 - `GET /api/trigger-jobs`
 - `POST /api/trigger-jobs`
-- `POST /api/trigger-jobs/run-once`
 - `GET /api/execution-logs`
 - `GET /api/audit-logs`
 
-`POST /api/strategies/:strategyId/follows` expects:
-- `userId`
-- `maxDailyLossUsd`
-- `maxMarketExposureUsd`
-- `fundingStablecoin` (`USDC`, `USDT`, `DAI`)
-
-Mutating endpoints support optional `Idempotency-Key` header:
-- `POST /api/strategies`
-- `POST /api/strategies/:strategyId/follows`
-- `POST /api/trigger-jobs`
-
-## Execution Phases (Backend)
-### Phase 1: Core API (done)
-- `Chunk 1.1`: Domain models + validators + in-memory repo
-- `Chunk 1.2`: Strategy/follow/market endpoints
-- `Chunk 1.3`: Stablecoin-aware follow payload
-
-### Phase 2: Testnet Runtime (in progress)
-- `Chunk 2.1`: Runtime config endpoint for testnet mode
-- `Chunk 2.2`: CORS/origin policy for web + extension clients
-- `Chunk 2.3`: Execution simulation contract for dry-run orders
-
-### Phase 3: Durable Execution (in progress)
-- `Chunk 3.1`: MongoDB persistence provider + seed + repository abstraction
-- `Chunk 3.2`: Trigger job queue + worker loop + execution logs
-- `Chunk 3.3`: Audit trail + idempotent order lifecycle (done)
-
-## Run
+## Local run
 ```bash
 npm install
 npm run dev
 ```
 
-Backend runs at `http://localhost:4000`.
-
 ## Environment
-Copy `.env.example` to `.env` if you need custom values.
+Copy `.env.example` to `.env`.
 
-Testnet-first defaults:
-- `NETWORK_MODE=testnet`
-- `POLYGON_NETWORK=amoy`
-- `EXECUTION_MODE=simulated`
-- `STORE_PROVIDER=mongodb`
-- `STORE_FALLBACK_TO_MEMORY=true`
-- `MONGODB_URI=mongodb://127.0.0.1:27017`
-- `MONGODB_DATABASE=edgemarkets`
-- `MONGODB_SERVER_SELECTION_TIMEOUT_MS=4000`
-- `TRIGGER_WORKER_ENABLED=true`
-- `TRIGGER_WORKER_INTERVAL_MS=6000`
-- `TRIGGER_WORKER_BATCH_SIZE=10`
+Important defaults now target live Polymarket infrastructure:
+- `EXECUTION_MODE=live`
+- `NETWORK_MODE=mainnet`
+- `POLYGON_NETWORK=polygon`
+- `POLYMARKET_HOST=https://clob.polymarket.com`
+- `POLYMARKET_GAMMA_HOST=https://gamma-api.polymarket.com`
+- `POLYMARKET_CHAIN_ID=137`
+- `POLYMARKET_MARKET_SOURCE=live`
+- `TRIGGER_WORKER_ENABLED=false`
 
-If MongoDB is unavailable and `STORE_FALLBACK_TO_MEMORY=true`, the backend auto-falls back to in-memory storage for local dev.
-- `AUTH_HANDOFF_TTL_SECONDS=600`
-
-Extension/web origin defaults:
-- `ALLOWED_ORIGINS=http://localhost:3000,https://polymarket.com,https://*.polymarket.com,chrome-extension://*`
+## Tests
+```bash
+npm run test
+npm run typecheck
+npm run build
+```

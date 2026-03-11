@@ -1,12 +1,11 @@
 import { FastifyInstance } from "fastify";
 import { getStore } from "../repositories/storeProvider.js";
+import { listMarkets } from "../services/polymarketService.js";
 
 export const registerMarketRoutes = async (app: FastifyInstance): Promise<void> => {
   app.get("/api/markets", async () => {
-    const store = getStore();
-
     return {
-      data: await store.listMarkets(),
+      data: await listMarkets(),
       error: null
     };
   });

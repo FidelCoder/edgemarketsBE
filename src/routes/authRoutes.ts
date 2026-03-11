@@ -1,22 +1,52 @@
 import { FastifyInstance } from "fastify";
 import { AppError } from "../domain/errors.js";
-import { consumeHandoffSchema, createAuthSessionSchema } from "../domain/validators.js";
+import {
+  consumeHandoffSchema,
+  createAuthChallengeSchema,
+  verifyAuthChallengeSchema
+} from "../domain/validators.js";
 import {
   consumeSessionHandoff,
+  createAuthChallenge,
   createSessionHandoff,
   getCurrentSession,
-  startAuthSession
+  verifyAuthChallenge
 } from "../services/authService.js";
 
 export const registerAuthRoutes = async (app: FastifyInstance): Promise<void> => {
-  app.post("/api/auth/sessions", async (request, reply) => {
-    const parsedBody = createAuthSessionSchema.safeParse(request.body);
+  app.post("/api/auth/challenge", async (request, reply) => {
+    const parsedBody = createAuthChallengeSchema.safeParse(request.body);
 
     if (!parsedBody.success) {
-      throw new AppError(parsedBody.error.errors[0]?.message ?? "Invalid auth session payload.", 400);
+      throw new AppError(parsedBody.error.errors[0]?.message ?? "Invalid auth challenge payload.", 400);
     }
 
-    const session = await startAuthSession(parsedBody.data);
+    const challenge = await createAuthChallenge({
+      walletAddress: parsedBody.data.walletAddress,
+      client: parsedBody.data.client ?? "web",
+      origin: request.headers.origin
+    });
+    reply.status(201);
+
+    return {
+      data: challenge,
+      error: null
+    };
+  });
+
+  app.post("/api/auth/verify", async (request, reply) => {
+    const parsedBody = verifyAuthChallengeSchema.safeParse(request.body);
+
+    if (!parsedBody.success) {
+      throw new AppError(parsedBody.error.errors[0]?.message ?? "Invalid auth verify payload.", 400);
+    }
+
+    const session = await verifyAuthChallenge({
+      challengeId: parsedBody.data.challengeId,
+      walletAddress: parsedBody.data.walletAddress,
+      signature: parsedBody.data.signature,
+      client: parsedBody.data.client ?? "web"
+    });
     reply.status(201);
 
     return {

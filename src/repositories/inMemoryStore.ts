@@ -6,12 +6,15 @@ import {
   CreateAuditLogInput,
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
+  CreateOrderRecordInput,
   CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
   Follow,
   IdempotencyRecord,
   Market,
+  OrderRecord,
+  OrderRecordQuery,
   SessionHandoff,
   StablecoinAsset,
   Strategy,
@@ -36,6 +39,10 @@ const sortByCreatedAtDesc = <T extends { createdAt: string }>(items: T[]): T[] =
   return [...items].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 };
 
+const sortByUpdatedAtDesc = <T extends { updatedAt: string }>(items: T[]): T[] => {
+  return [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+};
+
 const makeDuplicateError = (message: string): Error & { code: number } => {
   return Object.assign(new Error(message), { code: 11000 });
 };
@@ -51,6 +58,7 @@ export class InMemoryStore implements DataStore {
   private idempotencyRecords: IdempotencyRecord[];
   private authSessions: AuthSession[];
   private sessionHandoffs: SessionHandoff[];
+  private orderRecords: OrderRecord[];
 
   constructor() {
     this.markets = createSeedMarkets();
@@ -63,6 +71,7 @@ export class InMemoryStore implements DataStore {
     this.idempotencyRecords = [];
     this.authSessions = [];
     this.sessionHandoffs = [];
+    this.orderRecords = [];
   }
 
   public async connect(): Promise<void> {
@@ -420,5 +429,64 @@ export class InMemoryStore implements DataStore {
     );
 
     return consumed;
+  }
+
+  public async upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord> {
+    const existing = this.orderRecords.find((record) => record.polymarketOrderId === payload.polymarketOrderId);
+    const timestamp = nowIso();
+
+    if (existing) {
+      const updated: OrderRecord = {
+        ...existing,
+        ...payload,
+        transactionHashes: payload.transactionHashes ?? existing.transactionHashes,
+        errorMessage: payload.errorMessage,
+        filledAt: payload.filledAt ?? existing.filledAt,
+        updatedAt: timestamp
+      };
+
+      this.orderRecords = this.orderRecords.map((record) =>
+        record.id === existing.id ? updated : record
+      );
+
+      return updated;
+    }
+
+    const created: OrderRecord = {
+      id: createId(),
+      ...payload,
+      transactionHashes: payload.transactionHashes ?? [],
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    this.orderRecords = [created, ...this.orderRecords];
+    return created;
+  }
+
+  public async listOrderRecords(query?: OrderRecordQuery): Promise<OrderRecord[]> {
+    const filtered = this.orderRecords.filter((record) => {
+      if (query?.strategyId && record.strategyId !== query.strategyId) {
+        return false;
+      }
+
+      if (query?.creatorHandle && record.creatorHandle !== query.creatorHandle) {
+        return false;
+      }
+
+      if (query?.status && record.status !== query.status) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const sorted = sortByUpdatedAtDesc(filtered);
+    const limit = query?.limit ?? 100;
+    return sorted.slice(0, limit);
+  }
+
+  public async getOrderRecordByPolymarketOrderId(polymarketOrderId: string): Promise<OrderRecord | undefined> {
+    return this.orderRecords.find((record) => record.polymarketOrderId === polymarketOrderId);
   }
 }
