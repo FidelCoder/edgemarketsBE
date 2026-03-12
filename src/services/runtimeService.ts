@@ -30,7 +30,8 @@ export const getRuntimeConfig = async (): Promise<RuntimeConfig> => {
         : env.openAiApiKey
           ? env.openAiModel
           : null,
-    aiWebSearchEnabled: env.aiDefaultProvider === "openai" ? env.openAiWebSearchEnabled : false,
+    aiWebSearchEnabled:
+      env.aiDefaultProvider === "anthropic" ? env.anthropicWebSearchEnabled : env.openAiWebSearchEnabled,
     aiProviders: [
       {
         id: "openai",
@@ -44,7 +45,7 @@ export const getRuntimeConfig = async (): Promise<RuntimeConfig> => {
         label: "Anthropic",
         enabled: Boolean(env.anthropicApiKey),
         defaultModel: env.anthropicApiKey ? env.anthropicModel : null,
-        webSearchEnabled: false
+        webSearchEnabled: env.anthropicWebSearchEnabled
       }
     ]
   };

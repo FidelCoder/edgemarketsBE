@@ -136,6 +136,7 @@ export const env = {
   anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com/v1",
   anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5",
   anthropicVersion: process.env.ANTHROPIC_VERSION ?? "2023-06-01",
+  anthropicWebSearchEnabled: parseBoolean(process.env.ANTHROPIC_WEB_SEARCH_ENABLED, false),
   openAiTimeoutMs: toPositiveInt(process.env.OPENAI_TIMEOUT_MS, 20000),
   aiInsightCacheTtlMs: toPositiveInt(process.env.AI_INSIGHT_CACHE_TTL_MS, 300000)
 };

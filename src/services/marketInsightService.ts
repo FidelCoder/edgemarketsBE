@@ -175,7 +175,7 @@ const resolveProviderSelection = (input: GenerateMarketInsightInput): ProviderSe
       model: requestedModel || env.anthropicModel,
       apiKey: env.anthropicApiKey,
       baseUrl: env.anthropicBaseUrl,
-      webSearchEnabled: false,
+      webSearchEnabled: env.anthropicWebSearchEnabled,
       anthropicVersion: env.anthropicVersion
     };
   }
@@ -425,6 +425,15 @@ const createAnthropicPayload = async (
       max_tokens: 1400,
       system:
         "You are a prediction-market analyst for EdgeMarkets. Return only valid JSON. Be conservative, quantify uncertainty, and prefer wait when the edge is weak.",
+      tools: selection.webSearchEnabled
+        ? [
+            {
+              type: "web_search_20250305",
+              name: "web_search",
+              max_uses: 5
+            }
+          ]
+        : undefined,
       messages: [
         {
           role: "user",
@@ -442,7 +451,7 @@ const createAnthropicPayload = async (
 
   return {
     payload: parseJsonPayload(getAnthropicOutputText(rawBody)),
-    sources: []
+    sources: extractSources(rawBody)
   };
 };
 
