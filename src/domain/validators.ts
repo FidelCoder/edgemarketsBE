@@ -64,9 +64,25 @@ export const triggerWorkerRunSchema = z.object({
 export const auditLogQuerySchema = z.object({
   actorId: z.string().min(3).max(64).optional(),
   entityType: z
-    .enum(["strategy", "follow", "trigger_job", "execution_log", "idempotency", "worker", "session", "handoff", "order"])
+    .enum([
+      "strategy",
+      "follow",
+      "trigger_job",
+      "execution_log",
+      "idempotency",
+      "worker",
+      "session",
+      "handoff",
+      "order",
+      "market_insight"
+    ])
     .optional(),
   limit: z.coerce.number().int().min(1).max(200).optional()
+});
+
+export const generateMarketInsightSchema = z.object({
+  marketId: z.string().min(2),
+  angle: z.string().trim().min(3).max(240).optional()
 });
 
 export const createAuthChallengeSchema = z.object({

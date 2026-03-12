@@ -19,6 +19,9 @@ export const getRuntimeConfig = async (): Promise<RuntimeConfig> => {
     triggerWorkerEnabled: env.triggerWorkerEnabled,
     triggerWorkerIntervalMs: env.triggerWorkerIntervalMs,
     triggerWorkerBatchSize: env.triggerWorkerBatchSize,
-    supportedStablecoins: stablecoins.map((asset) => asset.symbol)
+    supportedStablecoins: stablecoins.map((asset) => asset.symbol),
+    aiEnabled: Boolean(env.openAiApiKey),
+    aiModel: env.openAiApiKey ? env.openAiModel : null,
+    aiWebSearchEnabled: env.openAiWebSearchEnabled
   };
 };

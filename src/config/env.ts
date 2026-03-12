@@ -111,5 +111,11 @@ export const env = {
   triggerWorkerRetryDelayMs: toPositiveInt(process.env.TRIGGER_WORKER_RETRY_DELAY_MS, 15000),
   authHandoffTtlSeconds: toPositiveInt(process.env.AUTH_HANDOFF_TTL_SECONDS, 600),
   authChallengeTtlSeconds: toPositiveInt(process.env.AUTH_CHALLENGE_TTL_SECONDS, 300),
-  authMessageDomain: process.env.AUTH_MESSAGE_DOMAIN ?? "edgemarkets.xyz"
+  authMessageDomain: process.env.AUTH_MESSAGE_DOMAIN ?? "edgemarkets.xyz",
+  openAiApiKey: process.env.OPENAI_API_KEY ?? "",
+  openAiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
+  openAiModel: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+  openAiWebSearchEnabled: parseBoolean(process.env.OPENAI_WEB_SEARCH_ENABLED, false),
+  openAiTimeoutMs: toPositiveInt(process.env.OPENAI_TIMEOUT_MS, 20000),
+  aiInsightCacheTtlMs: toPositiveInt(process.env.AI_INSIGHT_CACHE_TTL_MS, 300000)
 };
