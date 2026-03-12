@@ -9,6 +9,7 @@ const loadApp = async () => {
 
 const baseOrderPayload = (walletAddress: string) => ({
   polymarketOrderId: "pm-order-1",
+  source: "strategy",
   strategyId: "strategy-btc-breakout",
   creatorHandle: "quantnairobi",
   marketId: "market-btc-100k-2026",

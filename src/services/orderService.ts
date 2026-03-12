@@ -2,12 +2,14 @@ import { AppError } from "../domain/errors.js";
 import {
   CreateOrderRecordInput,
   CreatorPerformanceSummary,
+  Market,
   OrderRecord,
   OrderRecordQuery,
   StrategyWithMarket
 } from "../domain/types.js";
 import { getStore } from "../repositories/storeProvider.js";
 import { createAuditLog } from "./auditService.js";
+import { getMarketById } from "./polymarketService.js";
 import { getStrategyWithMarket } from "./strategyService.js";
 
 const sortByUpdatedAtDesc = <T extends { updatedAt: string }>(items: T[]): T[] => {
@@ -18,9 +20,19 @@ const withLimit = <T>(items: T[], limit?: number): T[] => {
   return items.slice(0, limit ?? 100);
 };
 
-const validateOrderAgainstStrategy = async (
+const validateOrderContext = async (
   payload: CreateOrderRecordInput
-): Promise<StrategyWithMarket> => {
+): Promise<{ market: Market; strategy?: StrategyWithMarket }> => {
+  if (payload.source === "agent") {
+    const market = await getMarketById(payload.marketId);
+
+    if (!market) {
+      throw new AppError("Order market does not exist.", 400);
+    }
+
+    return { market };
+  }
+
   const strategy = await getStrategyWithMarket(payload.strategyId);
 
   if (strategy.marketId !== payload.marketId) {
@@ -31,13 +43,16 @@ const validateOrderAgainstStrategy = async (
     throw new AppError("Order creator does not match strategy creator.", 400);
   }
 
-  return strategy;
+  return {
+    market: strategy.market,
+    strategy
+  };
 };
 
 export const upsertOrderRecord = async (payload: CreateOrderRecordInput): Promise<OrderRecord> => {
   const store = getStore();
   const existing = await store.getOrderRecordByPolymarketOrderId(payload.polymarketOrderId);
-  const strategy = await validateOrderAgainstStrategy(payload);
+  const context = await validateOrderContext(payload);
   const record = await store.upsertOrderRecord(payload);
 
   if (!existing) {
@@ -49,6 +64,7 @@ export const upsertOrderRecord = async (payload: CreateOrderRecordInput): Promis
       entityId: record.id,
       metadata: {
         polymarketOrderId: payload.polymarketOrderId,
+        source: payload.source,
         strategyId: payload.strategyId,
         marketId: payload.marketId,
         outcome: payload.outcome,
@@ -56,7 +72,7 @@ export const upsertOrderRecord = async (payload: CreateOrderRecordInput): Promis
         status: payload.status,
         tradeStatus: payload.tradeStatus,
         amountUsd: payload.amountUsd,
-        strategyName: strategy.name
+        strategyName: context.strategy?.name ?? "AI agent order"
       }
     });
 
@@ -72,6 +88,7 @@ export const upsertOrderRecord = async (payload: CreateOrderRecordInput): Promis
       entityId: record.id,
       metadata: {
         polymarketOrderId: payload.polymarketOrderId,
+        source: payload.source,
         previousStatus: existing.status,
         nextStatus: record.status,
         previousTradeStatus: existing.tradeStatus,

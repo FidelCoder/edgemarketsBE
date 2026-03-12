@@ -91,6 +91,23 @@ export const generateMarketInsightSchema = z.object({
   model: z.string().trim().min(2).max(80).optional()
 });
 
+export const generateAutomationPlanSchema = z.object({
+  bankrollUsd: z.number().positive().max(10000000),
+  targetReturnPct: z.number().min(1).max(500),
+  timeHorizonDays: z.number().int().min(1).max(365),
+  maxDrawdownPct: z.number().min(1).max(80),
+  dailyLossLimitUsd: z.number().positive().max(10000000),
+  maxPositions: z.number().int().min(1).max(12),
+  reserveRatio: z.number().min(0.05).max(0.7),
+  profitReinvestmentPct: z.number().min(0).max(100),
+  rebalanceIntervalHours: z.number().int().min(4).max(168),
+  maxConsecutiveLosses: z.number().int().min(1).max(10),
+  preferredCategories: z.array(z.string().min(2).max(40)).max(8).optional(),
+  provider: z.enum(["openai", "anthropic"]).optional(),
+  model: z.string().trim().min(2).max(80).optional(),
+  objective: z.string().trim().min(3).max(240).optional()
+});
+
 export const createAuthChallengeSchema = z.object({
   walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   client: z.enum(["web", "extension"]).optional()
@@ -113,6 +130,7 @@ export const tradeStatusSchema = z.enum(["MATCHED", "MINED", "CONFIRMED", "RETRY
 
 export const createOrderRecordSchema = z.object({
   polymarketOrderId: z.string().min(2),
+  source: z.enum(["strategy", "agent"]),
   strategyId: z.string().min(2),
   creatorHandle: z.string().min(2).max(24).regex(/^[a-zA-Z0-9_]+$/),
   marketId: z.string().min(2),

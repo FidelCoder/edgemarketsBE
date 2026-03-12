@@ -43,6 +43,8 @@ export interface ApiResponse<T> {
 
 export type OrderLifecycleStatus = "submitted" | "open" | "filled" | "failed" | "retried";
 
+export type OrderSource = "strategy" | "agent";
+
 export type PolymarketOrderSide = "BUY" | "SELL";
 
 export type PolymarketOrderType = "GTC" | "FOK" | "GTD" | "FAK";
@@ -215,6 +217,67 @@ export interface MarketInsight {
 export interface MarketInsightSource {
   title: string;
   url: string;
+}
+
+export interface AutomationHaltRules {
+  maxDrawdownPct: number;
+  dailyLossLimitUsd: number;
+  maxConsecutiveLosses: number;
+}
+
+export interface AutomationPlanLeg {
+  marketId: string;
+  question: string;
+  category: string;
+  subcategory: string;
+  action: "buy_yes" | "buy_no";
+  allocationUsd: number;
+  marketProbabilityYes: number;
+  fairProbabilityYes: number;
+  conviction: number;
+  rationale: string;
+  riskNote: string;
+  maxHoldingHours: number;
+  stopLossProbability: number;
+  takeProfitProbability: number;
+}
+
+export interface GenerateAutomationPlanInput {
+  bankrollUsd: number;
+  targetReturnPct: number;
+  timeHorizonDays: number;
+  maxDrawdownPct: number;
+  dailyLossLimitUsd: number;
+  maxPositions: number;
+  reserveRatio: number;
+  profitReinvestmentPct: number;
+  rebalanceIntervalHours: number;
+  maxConsecutiveLosses: number;
+  preferredCategories?: string[];
+  provider?: AiProvider;
+  model?: string;
+  objective?: string;
+}
+
+export interface AutomationPlan {
+  bankrollUsd: number;
+  deployableUsd: number;
+  reserveUsd: number;
+  targetReturnPct: number;
+  timeHorizonDays: number;
+  rebalanceIntervalHours: number;
+  profitReinvestmentPct: number;
+  haltRules: AutomationHaltRules;
+  summary: string;
+  compoundingNote: string;
+  reviewPlan: string[];
+  safeguards: string[];
+  provider: AiProvider;
+  model: string;
+  objective?: string;
+  legs: AutomationPlanLeg[];
+  sources: MarketInsightSource[];
+  generatedAt: string;
 }
 
 export interface AiProviderSummary {
@@ -413,6 +476,7 @@ export interface PolymarketPublicProfile {
 export interface OrderRecord {
   id: string;
   polymarketOrderId: string;
+  source: OrderSource;
   strategyId: string;
   creatorHandle: string;
   marketId: string;
@@ -438,6 +502,7 @@ export interface OrderRecord {
 
 export interface CreateOrderRecordInput {
   polymarketOrderId: string;
+  source: OrderSource;
   strategyId: string;
   creatorHandle: string;
   marketId: string;
