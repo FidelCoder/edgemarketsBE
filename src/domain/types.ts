@@ -12,6 +12,8 @@ export type ExecutionMode = "simulated" | "live";
 
 export type StoreProvider = "mongodb" | "memory";
 
+export type AiProvider = "openai" | "anthropic";
+
 export type TriggerJobStatus = "pending" | "processing" | "completed" | "failed";
 
 export type TriggerExecutionOutcome = "executed" | "failed" | "rescheduled";
@@ -133,8 +135,10 @@ export interface RuntimeConfig {
   triggerWorkerBatchSize: number;
   supportedStablecoins: StablecoinSymbol[];
   aiEnabled: boolean;
+  aiDefaultProvider: AiProvider | null;
   aiModel: string | null;
   aiWebSearchEnabled: boolean;
+  aiProviders: AiProviderSummary[];
 }
 
 export type MarketInsightTradeBias = "buy_yes" | "buy_no" | "wait";
@@ -142,6 +146,8 @@ export type MarketInsightTradeBias = "buy_yes" | "buy_no" | "wait";
 export interface GenerateMarketInsightInput {
   marketId: string;
   angle?: string;
+  provider?: AiProvider;
+  model?: string;
 }
 
 export interface MarketInsight {
@@ -151,6 +157,7 @@ export interface MarketInsight {
   fairProbabilityYes: number;
   edgePercentagePoints: number;
   confidence: number;
+  provider: AiProvider;
   tradeBias: MarketInsightTradeBias;
   timeHorizon: string;
   summary: string;
@@ -169,6 +176,14 @@ export interface MarketInsight {
 export interface MarketInsightSource {
   title: string;
   url: string;
+}
+
+export interface AiProviderSummary {
+  id: AiProvider;
+  label: string;
+  enabled: boolean;
+  defaultModel: string | null;
+  webSearchEnabled: boolean;
 }
 
 export interface SimulateFollowInput {

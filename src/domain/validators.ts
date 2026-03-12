@@ -82,7 +82,9 @@ export const auditLogQuerySchema = z.object({
 
 export const generateMarketInsightSchema = z.object({
   marketId: z.string().min(2),
-  angle: z.string().trim().min(3).max(240).optional()
+  angle: z.string().trim().min(3).max(240).optional(),
+  provider: z.enum(["openai", "anthropic"]).optional(),
+  model: z.string().trim().min(2).max(80).optional()
 });
 
 export const createAuthChallengeSchema = z.object({

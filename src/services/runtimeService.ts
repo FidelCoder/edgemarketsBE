@@ -20,8 +20,32 @@ export const getRuntimeConfig = async (): Promise<RuntimeConfig> => {
     triggerWorkerIntervalMs: env.triggerWorkerIntervalMs,
     triggerWorkerBatchSize: env.triggerWorkerBatchSize,
     supportedStablecoins: stablecoins.map((asset) => asset.symbol),
-    aiEnabled: Boolean(env.openAiApiKey),
-    aiModel: env.openAiApiKey ? env.openAiModel : null,
-    aiWebSearchEnabled: env.openAiWebSearchEnabled
+    aiEnabled: Boolean(env.openAiApiKey || env.anthropicApiKey),
+    aiDefaultProvider: env.aiDefaultProvider,
+    aiModel:
+      env.aiDefaultProvider === "anthropic"
+        ? env.anthropicApiKey
+          ? env.anthropicModel
+          : null
+        : env.openAiApiKey
+          ? env.openAiModel
+          : null,
+    aiWebSearchEnabled: env.aiDefaultProvider === "openai" ? env.openAiWebSearchEnabled : false,
+    aiProviders: [
+      {
+        id: "openai",
+        label: "OpenAI",
+        enabled: Boolean(env.openAiApiKey),
+        defaultModel: env.openAiApiKey ? env.openAiModel : null,
+        webSearchEnabled: env.openAiWebSearchEnabled
+      },
+      {
+        id: "anthropic",
+        label: "Anthropic",
+        enabled: Boolean(env.anthropicApiKey),
+        defaultModel: env.anthropicApiKey ? env.anthropicModel : null,
+        webSearchEnabled: false
+      }
+    ]
   };
 };

@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { AppError } from "../domain/errors.js";
 import {
+  AiProvider,
   GenerateMarketInsightInput,
   Market,
   MarketInsight,
@@ -17,6 +18,16 @@ interface OpenAiResponseShape {
       type?: string;
       text?: string;
     }>;
+  }>;
+  error?: {
+    message?: string;
+  };
+}
+
+interface AnthropicResponseShape {
+  content?: Array<{
+    type?: string;
+    text?: string;
   }>;
   error?: {
     message?: string;
@@ -44,6 +55,16 @@ interface CachedInsight {
 interface WebSourceCandidate {
   title?: unknown;
   url?: unknown;
+}
+
+interface ProviderSelection {
+  provider: AiProvider;
+  label: string;
+  model: string;
+  apiKey: string;
+  baseUrl: string;
+  webSearchEnabled: boolean;
+  anthropicVersion?: string;
 }
 
 const cache = new Map<string, CachedInsight>();
@@ -131,15 +152,57 @@ const insightSchema = {
   }
 } as const;
 
-const buildPrompt = (market: Market, angle?: string): string => {
+const toProviderLabel = (provider: AiProvider): string => {
+  return provider === "anthropic" ? "Anthropic" : "OpenAI";
+};
+
+const resolveProviderSelection = (input: GenerateMarketInsightInput): ProviderSelection => {
+  const provider = input.provider ?? env.aiDefaultProvider;
+  const requestedModel = input.model?.trim();
+
+  if (!provider) {
+    throw new AppError("No AI provider is configured on the backend.", 503);
+  }
+
+  if (provider === "anthropic") {
+    if (!env.anthropicApiKey) {
+      throw new AppError("Anthropic is not configured on the backend.", 503);
+    }
+
+    return {
+      provider,
+      label: toProviderLabel(provider),
+      model: requestedModel || env.anthropicModel,
+      apiKey: env.anthropicApiKey,
+      baseUrl: env.anthropicBaseUrl,
+      webSearchEnabled: false,
+      anthropicVersion: env.anthropicVersion
+    };
+  }
+
+  if (!env.openAiApiKey) {
+    throw new AppError("OpenAI is not configured on the backend.", 503);
+  }
+
+  return {
+    provider,
+    label: toProviderLabel(provider),
+    model: requestedModel || env.openAiModel,
+    apiKey: env.openAiApiKey,
+    baseUrl: env.openAiBaseUrl,
+    webSearchEnabled: env.openAiWebSearchEnabled
+  };
+};
+
+const buildPrompt = (selection: ProviderSelection, market: Market, angle?: string): string => {
   const prompt = {
     task:
       "Analyze this Polymarket market as a disciplined trading analyst. Estimate fair YES probability, identify the edge versus market pricing, define the clearest risks, and recommend whether a trader should buy YES, buy NO, or wait.",
     constraints: [
-      env.openAiWebSearchEnabled
-        ? "Use the provided market snapshot plus grounded web results if available. Do not invent facts."
-        : "Use only the market snapshot provided here. Do not invent external facts or sources.",
-      "If the snapshot is too thin for a strong view, lower confidence and prefer wait.",
+      selection.webSearchEnabled
+        ? "Use the market snapshot plus grounded web results when available. Do not invent facts."
+        : "Use only the market snapshot provided here unless the provider natively has grounded retrieval enabled.",
+      "If the information is too thin for a strong view, lower confidence and prefer wait.",
       "Confidence must reflect information quality, not optimism.",
       "Execution plan should be practical and brief."
     ],
@@ -154,13 +217,14 @@ const buildPrompt = (market: Market, angle?: string): string => {
       endDate: market.endDate,
       updatedAt: market.updatedAt
     },
-    analystAngle: angle?.trim() || null
+    analystAngle: angle?.trim() || null,
+    outputSchema: selection.provider === "anthropic" ? insightSchema : undefined
   };
 
   return JSON.stringify(prompt, null, 2);
 };
 
-const getOutputText = (response: OpenAiResponseShape): string => {
+const getOpenAiOutputText = (response: OpenAiResponseShape): string => {
   if (typeof response.output_text === "string" && response.output_text.trim().length > 0) {
     return response.output_text;
   }
@@ -175,6 +239,27 @@ const getOutputText = (response: OpenAiResponseShape): string => {
   }
 
   throw new AppError("AI provider returned an empty insight response.", 502);
+};
+
+const getAnthropicOutputText = (response: AnthropicResponseShape): string => {
+  const contentText = response.content
+    ?.map((item) => item.text)
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+  if (contentText) {
+    return contentText;
+  }
+
+  throw new AppError("Anthropic returned an empty insight response.", 502);
+};
+
+const parseJsonPayload = (value: string): RawInsightPayload => {
+  const trimmed = value.trim();
+  const withoutFence = trimmed.startsWith("```")
+    ? trimmed.replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim()
+    : trimmed;
+
+  return JSON.parse(withoutFence) as RawInsightPayload;
 };
 
 const clamp = (value: number, minimum: number, maximum: number, fallback: number): number => {
@@ -251,75 +336,130 @@ const resolveTradeBias = (
   return requestedBias;
 };
 
-const toCacheKey = ({ marketId, angle }: GenerateMarketInsightInput): string => {
-  return `${marketId}:${angle?.trim().toLowerCase() ?? ""}`;
+const toCacheKey = (input: GenerateMarketInsightInput, selection: ProviderSelection): string => {
+  return [
+    input.marketId,
+    selection.provider,
+    selection.model.toLowerCase(),
+    input.angle?.trim().toLowerCase() ?? ""
+  ].join(":");
+};
+
+const createOpenAiPayload = async (
+  selection: ProviderSelection,
+  market: Market,
+  signal: AbortSignal,
+  angle?: string
+): Promise<{ payload: RawInsightPayload; sources: MarketInsightSource[] }> => {
+  const response = await fetch(`${selection.baseUrl}/responses`, {
+    method: "POST",
+    signal,
+    headers: {
+      Authorization: `Bearer ${selection.apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: selection.model,
+      tools: selection.webSearchEnabled ? [{ type: "web_search" }] : undefined,
+      include: selection.webSearchEnabled ? ["web_search_call.action.sources"] : undefined,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text:
+                "You are a prediction-market analyst for EdgeMarkets. Be conservative, quantify uncertainty, and prefer wait when the edge is weak."
+            }
+          ]
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: buildPrompt(selection, market, angle)
+            }
+          ]
+        }
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "market_insight",
+          strict: true,
+          schema: insightSchema
+        }
+      }
+    })
+  });
+
+  const rawBody = (await response.json()) as OpenAiResponseShape;
+
+  if (!response.ok) {
+    throw new AppError(rawBody.error?.message ?? "OpenAI request failed.", 502);
+  }
+
+  return {
+    payload: parseJsonPayload(getOpenAiOutputText(rawBody)),
+    sources: extractSources(rawBody)
+  };
+};
+
+const createAnthropicPayload = async (
+  selection: ProviderSelection,
+  market: Market,
+  signal: AbortSignal,
+  angle?: string
+): Promise<{ payload: RawInsightPayload; sources: MarketInsightSource[] }> => {
+  const response = await fetch(`${selection.baseUrl}/messages`, {
+    method: "POST",
+    signal,
+    headers: {
+      "x-api-key": selection.apiKey,
+      "anthropic-version": selection.anthropicVersion ?? "2023-06-01",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: selection.model,
+      max_tokens: 1400,
+      system:
+        "You are a prediction-market analyst for EdgeMarkets. Return only valid JSON. Be conservative, quantify uncertainty, and prefer wait when the edge is weak.",
+      messages: [
+        {
+          role: "user",
+          content: buildPrompt(selection, market, angle)
+        }
+      ]
+    })
+  });
+
+  const rawBody = (await response.json()) as AnthropicResponseShape;
+
+  if (!response.ok) {
+    throw new AppError(rawBody.error?.message ?? "Anthropic request failed.", 502);
+  }
+
+  return {
+    payload: parseJsonPayload(getAnthropicOutputText(rawBody)),
+    sources: []
+  };
 };
 
 const createResponsePayload = async (
+  selection: ProviderSelection,
   market: Market,
   angle?: string
 ): Promise<{ payload: RawInsightPayload; sources: MarketInsightSource[] }> => {
-  if (!env.openAiApiKey) {
-    throw new AppError("AI provider is not configured. Set OPENAI_API_KEY on the backend.", 503);
-  }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.openAiTimeoutMs);
 
   try {
-    const response = await fetch(`${env.openAiBaseUrl}/responses`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${env.openAiApiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: env.openAiModel,
-        tools: env.openAiWebSearchEnabled ? [{ type: "web_search" }] : undefined,
-        include: env.openAiWebSearchEnabled ? ["web_search_call.action.sources"] : undefined,
-        input: [
-          {
-            role: "system",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "You are a prediction-market analyst for EdgeMarkets. Be conservative, quantify uncertainty, and prefer 'wait' when the edge is weak."
-              }
-            ]
-          },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: buildPrompt(market, angle)
-              }
-            ]
-          }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "market_insight",
-            strict: true,
-            schema: insightSchema
-          }
-        }
-      })
-    });
-
-    const rawBody = (await response.json()) as OpenAiResponseShape;
-
-    if (!response.ok) {
-      throw new AppError(rawBody.error?.message ?? "AI provider request failed.", 502);
+    if (selection.provider === "anthropic") {
+      return await createAnthropicPayload(selection, market, controller.signal, angle);
     }
 
-    return {
-      payload: JSON.parse(getOutputText(rawBody)) as RawInsightPayload,
-      sources: extractSources(rawBody)
-    };
+    return await createOpenAiPayload(selection, market, controller.signal, angle);
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
@@ -332,10 +472,12 @@ const createResponsePayload = async (
     throw new AppError(error instanceof Error ? error.message : "AI insight generation failed.", 502);
   } finally {
     clearTimeout(timeout);
+    controller.abort();
   }
 };
 
 const normalizeInsight = (
+  selection: ProviderSelection,
   market: Market,
   raw: RawInsightPayload,
   sources: MarketInsightSource[],
@@ -354,18 +496,19 @@ const normalizeInsight = (
     fairProbabilityYes: toRounded(fairProbabilityYes),
     edgePercentagePoints,
     confidence: toRounded(confidence),
+    provider: selection.provider,
     tradeBias,
     timeHorizon: raw.timeHorizon.trim(),
     summary: raw.summary.trim(),
     thesis: raw.thesis.trim(),
     counterThesis: raw.counterThesis.trim(),
     keyCatalysts: normalizeList(raw.keyCatalysts, ["Liquidity and pricing signal are the main usable inputs."]),
-    riskFlags: normalizeList(raw.riskFlags, ["Information quality is limited to market metadata."]),
+    riskFlags: normalizeList(raw.riskFlags, ["Information quality is limited to the current market context."]),
     executionPlan: normalizeList(raw.executionPlan, ["Wait for a stronger edge before committing size."]),
     sources,
     disclaimer: "AI insight supports decision-making. It does not guarantee returns and should not be used without sizing discipline.",
     angle: angle?.trim() || undefined,
-    model: env.openAiModel,
+    model: selection.model,
     generatedAt: new Date().toISOString()
   };
 };
@@ -377,15 +520,16 @@ export const generateMarketInsight = async (input: GenerateMarketInsightInput): 
     throw new AppError("Market not found for insight generation.", 404);
   }
 
-  const cacheKey = toCacheKey(input);
+  const selection = resolveProviderSelection(input);
+  const cacheKey = toCacheKey(input, selection);
   const cached = cache.get(cacheKey);
 
   if (cached && cached.expiresAt > Date.now()) {
     return cached.insight;
   }
 
-  const rawInsight = await createResponsePayload(market, input.angle);
-  const insight = normalizeInsight(market, rawInsight.payload, rawInsight.sources, input.angle);
+  const rawInsight = await createResponsePayload(selection, market, input.angle);
+  const insight = normalizeInsight(selection, market, rawInsight.payload, rawInsight.sources, input.angle);
 
   cache.set(cacheKey, {
     insight,
@@ -400,6 +544,8 @@ export const generateMarketInsight = async (input: GenerateMarketInsightInput): 
     entityId: market.id,
     metadata: {
       marketId: market.id,
+      provider: insight.provider,
+      model: insight.model,
       tradeBias: insight.tradeBias,
       confidence: insight.confidence,
       edgePercentagePoints: insight.edgePercentagePoints,

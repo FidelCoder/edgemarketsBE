@@ -1,4 +1,4 @@
-import { ExecutionMode, NetworkMode, StoreProvider } from "../domain/types.js";
+import { AiProvider, ExecutionMode, NetworkMode, StoreProvider } from "../domain/types.js";
 
 const toPort = (value: string | undefined): number => {
   const parsed = Number(value);
@@ -53,7 +53,22 @@ const parseExecutionMode = (value: string | undefined): ExecutionMode => {
   return value === "live" ? "live" : "simulated";
 };
 
+const parseAiProvider = (value: string | undefined): AiProvider | null => {
+  if (value === "openai" || value === "anthropic") {
+    return value;
+  }
+
+  return null;
+};
+
 const defaultExecutionMode = parseExecutionMode(process.env.EXECUTION_MODE ?? "live");
+const defaultAiProvider =
+  parseAiProvider(process.env.AI_DEFAULT_PROVIDER) ??
+  (process.env.OPENAI_API_KEY
+    ? "openai"
+    : process.env.ANTHROPIC_API_KEY
+      ? "anthropic"
+      : null);
 
 const parseNetworkMode = (value: string | undefined): NetworkMode => {
   if (!value) {
@@ -112,10 +127,15 @@ export const env = {
   authHandoffTtlSeconds: toPositiveInt(process.env.AUTH_HANDOFF_TTL_SECONDS, 600),
   authChallengeTtlSeconds: toPositiveInt(process.env.AUTH_CHALLENGE_TTL_SECONDS, 300),
   authMessageDomain: process.env.AUTH_MESSAGE_DOMAIN ?? "edgemarkets.xyz",
+  aiDefaultProvider: defaultAiProvider,
   openAiApiKey: process.env.OPENAI_API_KEY ?? "",
   openAiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
   openAiModel: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
   openAiWebSearchEnabled: parseBoolean(process.env.OPENAI_WEB_SEARCH_ENABLED, false),
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com/v1",
+  anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5",
+  anthropicVersion: process.env.ANTHROPIC_VERSION ?? "2023-06-01",
   openAiTimeoutMs: toPositiveInt(process.env.OPENAI_TIMEOUT_MS, 20000),
   aiInsightCacheTtlMs: toPositiveInt(process.env.AI_INSIGHT_CACHE_TTL_MS, 300000)
 };
