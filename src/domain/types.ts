@@ -67,6 +67,44 @@ export interface Market {
   negRisk: boolean;
 }
 
+export interface MarketPricePoint {
+  timestamp: string;
+  price: number;
+}
+
+export interface MarketComment {
+  id: string;
+  body: string;
+  userAddress: string | null;
+  displayName: string | null;
+  pseudonym: string | null;
+  profileImage: string | null;
+  reactionCount: number;
+  createdAt: string;
+}
+
+export interface MarketContext {
+  marketId: string;
+  question: string;
+  description: string | null;
+  resolutionSource: string | null;
+  image: string | null;
+  featuredImage: string | null;
+  eventTitle: string | null;
+  eventSubtitle: string | null;
+  eventSlug: string | null;
+  volume24hr: number | null;
+  commentCount: number | null;
+  bestBid: number | null;
+  bestAsk: number | null;
+  lastTradePrice: number | null;
+  oneDayPriceChange: number | null;
+  oneWeekPriceChange: number | null;
+  commentsEnabled: boolean;
+  priceHistory: MarketPricePoint[];
+  comments: MarketComment[];
+}
+
 export interface Strategy {
   id: string;
   name: string;

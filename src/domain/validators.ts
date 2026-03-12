@@ -34,6 +34,10 @@ export const strategyParamsSchema = z.object({
   strategyId: z.string().min(2)
 });
 
+export const marketParamsSchema = z.object({
+  marketId: z.string().min(2)
+});
+
 export const simulateFollowSchema = z.object({
   strategyId: z.string().min(2),
   allocationUsd: z.number().positive().max(1000000),
