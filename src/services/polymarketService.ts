@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { Market, PolymarketPublicProfile } from "../domain/types.js";
 import { getStore } from "../repositories/storeProvider.js";
+import { inferMarketTaxonomy } from "./marketTaxonomy.js";
 
 interface RawGammaMarket {
   conditionId?: string;
@@ -63,50 +64,6 @@ const toNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const inferCategoryFromQuestion = (question: string): string | null => {
-  const normalized = question.toLowerCase();
-
-  if (/\b(bitcoin|btc|ethereum|eth|solana|xrp|doge|crypto)\b/.test(normalized)) {
-    return "Crypto";
-  }
-
-  if (/\b(election|president|trump|senate|house|democrat|republican|government)\b/.test(normalized)) {
-    return "Politics";
-  }
-
-  if (/\b(fed|rates|cpi|inflation|recession|gdp|unemployment|economy)\b/.test(normalized)) {
-    return "Macro";
-  }
-
-  if (/\b(nba|nfl|mlb|nhl|soccer|football|champions league|ufc|tennis)\b/.test(normalized)) {
-    return "Sports";
-  }
-
-  if (/\b(oscar|grammy|movie|album|box office|tv|celebrity)\b/.test(normalized)) {
-    return "Culture";
-  }
-
-  if (/\b(ai|openai|xai|tesla|apple|nvidia|meta|google)\b/.test(normalized)) {
-    return "Tech";
-  }
-
-  return null;
-};
-
-const toCategory = (market: RawGammaMarket): string => {
-  if (market.category && market.category.trim().length > 0 && market.category.trim().toLowerCase() !== "polymarket") {
-    return market.category;
-  }
-
-  const tagLabel = market.tags?.find((tag) => tag.label?.trim())?.label;
-
-  if (tagLabel && tagLabel.trim().toLowerCase() !== "polymarket") {
-    return tagLabel;
-  }
-
-  return inferCategoryFromQuestion(market.question ?? "") ?? "Polymarket";
-};
-
 const intervalSeriesPattern =
   /\s*-\s*[a-z]{3,9}\s+\d{1,2},\s+\d{1,2}:\d{2}(?:am|pm)-\d{1,2}:\d{2}(?:am|pm)\s+[a-z]{2,4}$/i;
 
@@ -158,10 +115,18 @@ const normalizeMarket = (market: RawGammaMarket): Market | null => {
     return null;
   }
 
+  const tagLabels = market.tags?.map((tag) => tag.label ?? "").filter(Boolean) ?? [];
+  const taxonomy = inferMarketTaxonomy({
+    rawCategory: market.category,
+    question,
+    tags: tagLabels
+  });
+
   return {
     id: conditionId,
     question,
-    category: toCategory(market),
+    category: taxonomy.category,
+    subcategory: taxonomy.subcategory,
     yesPrice: outcomePrices[resolvedYesIndex] ?? 0,
     noPrice: outcomePrices[resolvedNoIndex] ?? 0,
     liquidityUsd: toNumber(market.liquidityNum ?? market.liquidity),

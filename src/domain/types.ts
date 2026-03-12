@@ -53,6 +53,7 @@ export interface Market {
   id: string;
   question: string;
   category: string;
+  subcategory: string;
   yesPrice: number;
   noPrice: number;
   liquidityUsd: number;
