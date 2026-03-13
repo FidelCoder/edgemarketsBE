@@ -357,7 +357,19 @@ export interface CreateAgentReviewInput {
 
 export interface AgentReviewQuery {
   userId?: string;
+  decision?: AgentReviewDecision;
   limit?: number;
+}
+
+export interface AgentReviewSummary {
+  userId: string;
+  totalReviews: number;
+  holdDecisions: number;
+  haltDecisions: number;
+  haltRate: number;
+  averageDrawdownPct: number;
+  averageDayPnlUsd: number;
+  latestReviewedAt?: string;
 }
 
 export interface AiProviderSummary {

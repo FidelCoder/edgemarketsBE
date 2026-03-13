@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { AppError } from "../domain/errors.js";
 import { agentReviewQuerySchema, agentWorkerRunSchema, upsertAgentSessionSchema } from "../domain/validators.js";
 import { getCurrentSession } from "../services/authService.js";
-import { listUserAgentReviews } from "../services/agentReviewService.js";
+import { getUserAgentReviewSummary, listUserAgentReviews } from "../services/agentReviewService.js";
 import { getAgentSessionForAuthSession, upsertAgentSession } from "../services/agentSessionService.js";
 import { processAgentSessionsTick } from "../services/agentWorkerService.js";
 
@@ -39,7 +39,16 @@ export const registerAgentRoutes = async (app: FastifyInstance): Promise<void> =
     }
 
     return {
-      data: await listUserAgentReviews(session.userId, parsedQuery.data.limit ?? 20),
+      data: await listUserAgentReviews(session.userId, parsedQuery.data.limit ?? 20, parsedQuery.data.decision),
+      error: null
+    };
+  });
+
+  app.get("/api/agent/reviews/summary", async (request) => {
+    const session = await getCurrentSession(request.headers.authorization);
+
+    return {
+      data: await getUserAgentReviewSummary(session.userId),
       error: null
     };
   });

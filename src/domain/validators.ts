@@ -70,6 +70,7 @@ export const agentWorkerRunSchema = z.object({
 });
 
 export const agentReviewQuerySchema = z.object({
+  decision: z.enum(["hold", "halt"]).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional()
 });
 

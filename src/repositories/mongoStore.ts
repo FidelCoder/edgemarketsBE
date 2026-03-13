@@ -563,6 +563,10 @@ export class MongoStore implements DataStore {
       filter.userId = query.userId;
     }
 
+    if (query?.decision) {
+      filter.decision = query.decision;
+    }
+
     return this.getCollections()
       .agentReviews
       .find(filter, { projection: { _id: 0 } })

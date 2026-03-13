@@ -188,7 +188,7 @@ describe("agent session routes", () => {
 
     const reviewsResponse = await app.inject({
       method: "GET",
-      url: "/api/agent/reviews?limit=5",
+      url: "/api/agent/reviews?decision=hold&limit=5",
       headers: {
         authorization: `Bearer ${session.token}`
       }
@@ -198,6 +198,21 @@ describe("agent session routes", () => {
     expect(reviewsResponse.json().data).toHaveLength(1);
     expect(reviewsResponse.json().data[0].source).toBe("worker");
     expect(reviewsResponse.json().data[0].decision).toBe("hold");
+
+    const reviewSummaryResponse = await app.inject({
+      method: "GET",
+      url: "/api/agent/reviews/summary",
+      headers: {
+        authorization: `Bearer ${session.token}`
+      }
+    });
+
+    expect(reviewSummaryResponse.statusCode).toBe(200);
+    expect(reviewSummaryResponse.json().data).toMatchObject({
+      totalReviews: 1,
+      holdDecisions: 1,
+      haltDecisions: 0
+    });
 
     await app.close();
   });

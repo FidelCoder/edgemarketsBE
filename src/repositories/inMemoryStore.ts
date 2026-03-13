@@ -500,6 +500,10 @@ export class InMemoryStore implements DataStore {
         return false;
       }
 
+      if (query?.decision && review.decision !== query.decision) {
+        return false;
+      }
+
       return true;
     });
 
