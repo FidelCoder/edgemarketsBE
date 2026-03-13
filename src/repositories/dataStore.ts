@@ -1,4 +1,5 @@
 import {
+  AgentSession,
   AuthSession,
   AuditLog,
   AuditLogQuery,
@@ -19,7 +20,8 @@ import {
   StablecoinAsset,
   Strategy,
   TriggerJob,
-  TriggerJobQuery
+  TriggerJobQuery,
+  UpsertAgentSessionInput
 } from "../domain/types.js";
 
 export interface DataStore {
@@ -50,6 +52,8 @@ export interface DataStore {
   updateAuthSessionLastActive(token: string): Promise<AuthSession | undefined>;
   createSessionHandoff(payload: CreateSessionHandoffInput): Promise<SessionHandoff>;
   consumeSessionHandoff(code: string, consumedAtIso: string): Promise<SessionHandoff | undefined>;
+  getAgentSessionByUserId(userId: string): Promise<AgentSession | undefined>;
+  upsertAgentSession(payload: UpsertAgentSessionInput): Promise<AgentSession>;
   upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord>;
   listOrderRecords(query?: OrderRecordQuery): Promise<OrderRecord[]>;
   getOrderRecordByPolymarketOrderId(polymarketOrderId: string): Promise<OrderRecord | undefined>;

@@ -1,5 +1,6 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import {
+  AgentSession,
   AuthSession,
   AuditLog,
   AuditLogQuery,
@@ -20,7 +21,8 @@ import {
   StablecoinAsset,
   Strategy,
   TriggerJob,
-  TriggerJobQuery
+  TriggerJobQuery,
+  UpsertAgentSessionInput
 } from "../domain/types.js";
 import { createId } from "../utils/id.js";
 import { env } from "../config/env.js";
@@ -42,6 +44,7 @@ interface StoreCollections {
   idempotencyRecords: Collection<IdempotencyRecord>;
   authSessions: Collection<AuthSession>;
   sessionHandoffs: Collection<SessionHandoff>;
+  agentSessions: Collection<AgentSession>;
   orderRecords: Collection<OrderRecord>;
 }
 
@@ -89,6 +92,9 @@ export class MongoStore implements DataStore {
       collections.sessionHandoffs.createIndex({ id: 1 }, { unique: true }),
       collections.sessionHandoffs.createIndex({ code: 1 }, { unique: true }),
       collections.sessionHandoffs.createIndex({ expiresAt: 1 }),
+      collections.agentSessions.createIndex({ id: 1 }, { unique: true }),
+      collections.agentSessions.createIndex({ userId: 1 }, { unique: true }),
+      collections.agentSessions.createIndex({ updatedAt: -1 }),
       collections.orderRecords.createIndex({ id: 1 }, { unique: true }),
       collections.orderRecords.createIndex({ polymarketOrderId: 1 }, { unique: true }),
       collections.orderRecords.createIndex({ userId: 1, updatedAt: -1 }),
@@ -475,6 +481,45 @@ export class MongoStore implements DataStore {
     return this.extractFindOneAndUpdateResult<SessionHandoff>(result) ?? undefined;
   }
 
+  public async getAgentSessionByUserId(userId: string): Promise<AgentSession | undefined> {
+    return this.getCollections().agentSessions.findOne(
+      { userId },
+      { projection: { _id: 0 } }
+    ) as Promise<AgentSession | undefined>;
+  }
+
+  public async upsertAgentSession(payload: UpsertAgentSessionInput): Promise<AgentSession> {
+    const timestamp = nowIso();
+    const existing = await this.getAgentSessionByUserId(payload.userId);
+
+    if (existing) {
+      const updated: AgentSession = {
+        ...existing,
+        ...payload,
+        walletAddress: payload.walletAddress.toLowerCase(),
+        updatedAt: timestamp
+      };
+
+      await this.getCollections().agentSessions.updateOne(
+        { userId: payload.userId },
+        { $set: updated }
+      );
+
+      return updated;
+    }
+
+    const created: AgentSession = {
+      id: createId(),
+      ...payload,
+      walletAddress: payload.walletAddress.toLowerCase(),
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    await this.getCollections().agentSessions.insertOne(created);
+    return created;
+  }
+
   public async upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord> {
     const timestamp = nowIso();
     const existing = await this.getOrderRecordByPolymarketOrderId(payload.polymarketOrderId);
@@ -557,6 +602,7 @@ export class MongoStore implements DataStore {
       idempotencyRecords: this.db.collection<IdempotencyRecord>("idempotency_records"),
       authSessions: this.db.collection<AuthSession>("auth_sessions"),
       sessionHandoffs: this.db.collection<SessionHandoff>("session_handoffs"),
+      agentSessions: this.db.collection<AgentSession>("agent_sessions"),
       orderRecords: this.db.collection<OrderRecord>("order_records")
     };
   }

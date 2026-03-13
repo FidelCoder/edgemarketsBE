@@ -1,4 +1,5 @@
 import {
+  AgentSession,
   AuthSession,
   AuditLog,
   AuditLogQuery,
@@ -19,7 +20,8 @@ import {
   StablecoinAsset,
   Strategy,
   TriggerJob,
-  TriggerJobQuery
+  TriggerJobQuery,
+  UpsertAgentSessionInput
 } from "../domain/types.js";
 import {
   assertTransitionAllowed,
@@ -59,6 +61,7 @@ export class InMemoryStore implements DataStore {
   private idempotencyRecords: IdempotencyRecord[];
   private authSessions: AuthSession[];
   private sessionHandoffs: SessionHandoff[];
+  private agentSessions: AgentSession[];
   private orderRecords: OrderRecord[];
 
   constructor() {
@@ -72,6 +75,7 @@ export class InMemoryStore implements DataStore {
     this.idempotencyRecords = [];
     this.authSessions = [];
     this.sessionHandoffs = [];
+    this.agentSessions = [];
     this.orderRecords = [];
   }
 
@@ -430,6 +434,38 @@ export class InMemoryStore implements DataStore {
     );
 
     return consumed;
+  }
+
+  public async getAgentSessionByUserId(userId: string): Promise<AgentSession | undefined> {
+    return this.agentSessions.find((session) => session.userId === userId);
+  }
+
+  public async upsertAgentSession(payload: UpsertAgentSessionInput): Promise<AgentSession> {
+    const existing = await this.getAgentSessionByUserId(payload.userId);
+    const timestamp = nowIso();
+
+    if (existing) {
+      const updated: AgentSession = {
+        ...existing,
+        ...payload,
+        walletAddress: payload.walletAddress.toLowerCase(),
+        updatedAt: timestamp
+      };
+
+      this.agentSessions = this.agentSessions.map((session) => (session.id === existing.id ? updated : session));
+      return updated;
+    }
+
+    const created: AgentSession = {
+      id: createId(),
+      ...payload,
+      walletAddress: payload.walletAddress.toLowerCase(),
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    this.agentSessions = [created, ...this.agentSessions];
+    return created;
   }
 
   public async upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord> {

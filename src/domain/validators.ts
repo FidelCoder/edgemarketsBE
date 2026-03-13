@@ -108,6 +108,69 @@ export const generateAutomationPlanSchema = z.object({
   objective: z.string().trim().min(3).max(240).optional()
 });
 
+const persistedAutomationPlanLegSchema = z.object({
+  marketId: z.string().min(2),
+  question: z.string().min(3).max(240),
+  category: z.string().min(2).max(80),
+  subcategory: z.string().min(2).max(80),
+  action: z.enum(["buy_yes", "buy_no"]),
+  allocationUsd: z.number().positive().max(10000000),
+  marketProbabilityYes: z.number().min(0).max(1),
+  fairProbabilityYes: z.number().min(0).max(1),
+  conviction: z.number().min(0).max(1),
+  rationale: z.string().min(10).max(260),
+  riskNote: z.string().min(10).max(220),
+  maxHoldingHours: z.number().int().min(1).max(720),
+  stopLossProbability: z.number().min(0).max(1),
+  takeProfitProbability: z.number().min(0).max(1)
+});
+
+const persistedAutomationPlanSchema = z.object({
+  bankrollUsd: z.number().positive().max(10000000),
+  deployableUsd: z.number().positive().max(10000000),
+  reserveUsd: z.number().min(0).max(10000000),
+  targetReturnPct: z.number().min(1).max(500),
+  timeHorizonDays: z.number().int().min(1).max(365),
+  rebalanceIntervalHours: z.number().int().min(1).max(168),
+  profitReinvestmentPct: z.number().min(0).max(100),
+  haltRules: z.object({
+    maxDrawdownPct: z.number().min(1).max(80),
+    dailyLossLimitUsd: z.number().positive().max(10000000),
+    maxConsecutiveLosses: z.number().int().min(1).max(10)
+  }),
+  summary: z.string().min(20).max(500),
+  compoundingNote: z.string().min(10).max(260),
+  reviewPlan: z.array(z.string().min(3).max(180)).min(1).max(8),
+  safeguards: z.array(z.string().min(3).max(180)).min(1).max(8),
+  provider: z.enum(["openai", "anthropic"]),
+  model: z.string().trim().min(2).max(80),
+  objective: z.string().trim().min(3).max(240).optional(),
+  legs: z.array(persistedAutomationPlanLegSchema).min(1).max(12),
+  sources: z.array(z.object({ title: z.string().min(1).max(200), url: z.string().url() })).max(12),
+  generatedAt: z.string().datetime()
+});
+
+export const upsertAgentSessionSchema = z.object({
+  status: z.enum(["draft", "running", "halted"]),
+  plan: persistedAutomationPlanSchema,
+  executedOrderIds: z.array(z.string().min(2)).max(200),
+  executedMarketIds: z.array(z.string().min(2)).max(50),
+  haltReason: z.string().trim().min(3).max(240).optional(),
+  lastEvaluation: z
+    .object({
+      deployedUsd: z.number().min(0).max(10000000),
+      markToMarketPnlUsd: z.number().min(-10000000).max(10000000),
+      dayPnlUsd: z.number().min(-10000000).max(10000000),
+      drawdownPct: z.number().min(0).max(100),
+      consecutiveLosses: z.number().int().min(0).max(100),
+      haltTriggered: z.boolean(),
+      haltReason: z.string().trim().min(3).max(240).optional(),
+      executedOrders: z.number().int().min(0).max(1000),
+      effectiveBankrollUsd: z.number().min(-10000000).max(10000000)
+    })
+    .optional()
+});
+
 export const createAuthChallengeSchema = z.object({
   walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   client: z.enum(["web", "extension"]).optional()

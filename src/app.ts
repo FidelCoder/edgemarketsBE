@@ -3,6 +3,7 @@ import Fastify, { FastifyInstance } from "fastify";
 import { isAllowedOrigin } from "./config/cors.js";
 import { env } from "./config/env.js";
 import { closeStore, initializeStore } from "./repositories/storeProvider.js";
+import { registerAgentRoutes } from "./routes/agentRoutes.js";
 import { registerAuditRoutes } from "./routes/auditRoutes.js";
 import { registerAiRoutes } from "./routes/aiRoutes.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
@@ -38,6 +39,7 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   await registerMarketRoutes(app);
   await registerPolymarketRoutes(app);
   await registerAiRoutes(app);
+  await registerAgentRoutes(app);
   await registerAuthRoutes(app);
   await registerRuntimeRoutes(app);
   await registerStrategyRoutes(app);

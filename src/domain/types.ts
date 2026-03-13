@@ -280,6 +280,45 @@ export interface AutomationPlan {
   generatedAt: string;
 }
 
+export type AgentSessionStatus = "draft" | "running" | "halted";
+
+export interface AgentEvaluationSnapshot {
+  deployedUsd: number;
+  markToMarketPnlUsd: number;
+  dayPnlUsd: number;
+  drawdownPct: number;
+  consecutiveLosses: number;
+  haltTriggered: boolean;
+  haltReason?: string;
+  executedOrders: number;
+  effectiveBankrollUsd: number;
+}
+
+export interface AgentSession {
+  id: string;
+  userId: string;
+  walletAddress: string;
+  status: AgentSessionStatus;
+  plan: AutomationPlan;
+  executedOrderIds: string[];
+  executedMarketIds: string[];
+  haltReason?: string;
+  lastEvaluation?: AgentEvaluationSnapshot;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertAgentSessionInput {
+  userId: string;
+  walletAddress: string;
+  status: AgentSessionStatus;
+  plan: AutomationPlan;
+  executedOrderIds: string[];
+  executedMarketIds: string[];
+  haltReason?: string;
+  lastEvaluation?: AgentEvaluationSnapshot;
+}
+
 export interface AiProviderSummary {
   id: AiProvider;
   label: string;
