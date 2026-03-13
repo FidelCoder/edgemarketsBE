@@ -88,6 +88,10 @@ export const auditLogQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional()
 });
 
+export const pnlLedgerQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional()
+});
+
 export const generateMarketInsightSchema = z.object({
   marketId: z.string().min(2),
   angle: z.string().trim().min(3).max(240).optional(),
@@ -164,13 +168,15 @@ export const upsertAgentSessionSchema = z.object({
     .object({
       deployedUsd: z.number().min(0).max(10000000),
       markToMarketPnlUsd: z.number().min(-10000000).max(10000000),
+      realizedPnlUsd: z.number().min(-10000000).max(10000000),
       dayPnlUsd: z.number().min(-10000000).max(10000000),
       drawdownPct: z.number().min(0).max(100),
       consecutiveLosses: z.number().int().min(0).max(100),
       haltTriggered: z.boolean(),
       haltReason: z.string().trim().min(3).max(240).optional(),
       executedOrders: z.number().int().min(0).max(1000),
-      effectiveBankrollUsd: z.number().min(-10000000).max(10000000)
+      effectiveBankrollUsd: z.number().min(-10000000).max(10000000),
+      compoundingBankrollUsd: z.number().min(-10000000).max(10000000)
     })
     .optional()
 });

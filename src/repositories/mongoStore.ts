@@ -9,6 +9,7 @@ import {
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
   CreateOrderRecordInput,
+  CreatePnlLedgerEntryInput,
   CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
@@ -17,6 +18,8 @@ import {
   Market,
   OrderRecord,
   OrderRecordQuery,
+  PnlLedgerEntry,
+  PnlLedgerQuery,
   SessionHandoff,
   StablecoinAsset,
   Strategy,
@@ -45,6 +48,7 @@ interface StoreCollections {
   authSessions: Collection<AuthSession>;
   sessionHandoffs: Collection<SessionHandoff>;
   agentSessions: Collection<AgentSession>;
+  pnlLedgerEntries: Collection<PnlLedgerEntry>;
   orderRecords: Collection<OrderRecord>;
 }
 
@@ -96,6 +100,9 @@ export class MongoStore implements DataStore {
       collections.agentSessions.createIndex({ userId: 1 }, { unique: true }),
       collections.agentSessions.createIndex({ status: 1, updatedAt: -1 }),
       collections.agentSessions.createIndex({ updatedAt: -1 }),
+      collections.pnlLedgerEntries.createIndex({ id: 1 }, { unique: true }),
+      collections.pnlLedgerEntries.createIndex({ key: 1 }, { unique: true }),
+      collections.pnlLedgerEntries.createIndex({ userId: 1, createdAt: -1 }),
       collections.orderRecords.createIndex({ id: 1 }, { unique: true }),
       collections.orderRecords.createIndex({ polymarketOrderId: 1 }, { unique: true }),
       collections.orderRecords.createIndex({ userId: 1, updatedAt: -1 }),
@@ -531,6 +538,39 @@ export class MongoStore implements DataStore {
     return created;
   }
 
+  public async getPnlLedgerEntryByKey(key: string): Promise<PnlLedgerEntry | undefined> {
+    return this.getCollections().pnlLedgerEntries.findOne(
+      { key },
+      { projection: { _id: 0 } }
+    ) as Promise<PnlLedgerEntry | undefined>;
+  }
+
+  public async createPnlLedgerEntry(payload: CreatePnlLedgerEntryInput): Promise<PnlLedgerEntry> {
+    const created: PnlLedgerEntry = {
+      id: createId(),
+      ...payload,
+      createdAt: nowIso()
+    };
+
+    await this.getCollections().pnlLedgerEntries.insertOne(created);
+    return created;
+  }
+
+  public async listPnlLedgerEntries(query?: PnlLedgerQuery): Promise<PnlLedgerEntry[]> {
+    const filter: Record<string, string> = {};
+
+    if (query?.userId) {
+      filter.userId = query.userId;
+    }
+
+    return this.getCollections()
+      .pnlLedgerEntries
+      .find(filter, { projection: { _id: 0 } })
+      .sort(sortByCreatedAtDesc)
+      .limit(query?.limit ?? 100)
+      .toArray();
+  }
+
   public async upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord> {
     const timestamp = nowIso();
     const existing = await this.getOrderRecordByPolymarketOrderId(payload.polymarketOrderId);
@@ -618,6 +658,7 @@ export class MongoStore implements DataStore {
       authSessions: this.db.collection<AuthSession>("auth_sessions"),
       sessionHandoffs: this.db.collection<SessionHandoff>("session_handoffs"),
       agentSessions: this.db.collection<AgentSession>("agent_sessions"),
+      pnlLedgerEntries: this.db.collection<PnlLedgerEntry>("pnl_ledger_entries"),
       orderRecords: this.db.collection<OrderRecord>("order_records")
     };
   }

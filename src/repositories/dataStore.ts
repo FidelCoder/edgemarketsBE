@@ -8,6 +8,7 @@ import {
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
   CreateOrderRecordInput,
+  CreatePnlLedgerEntryInput,
   CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
@@ -16,6 +17,8 @@ import {
   Market,
   OrderRecord,
   OrderRecordQuery,
+  PnlLedgerEntry,
+  PnlLedgerQuery,
   SessionHandoff,
   StablecoinAsset,
   Strategy,
@@ -55,6 +58,9 @@ export interface DataStore {
   listAgentSessions(status?: AgentSession["status"]): Promise<AgentSession[]>;
   getAgentSessionByUserId(userId: string): Promise<AgentSession | undefined>;
   upsertAgentSession(payload: UpsertAgentSessionInput): Promise<AgentSession>;
+  getPnlLedgerEntryByKey(key: string): Promise<PnlLedgerEntry | undefined>;
+  createPnlLedgerEntry(payload: CreatePnlLedgerEntryInput): Promise<PnlLedgerEntry>;
+  listPnlLedgerEntries(query?: PnlLedgerQuery): Promise<PnlLedgerEntry[]>;
   upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord>;
   listOrderRecords(query?: OrderRecordQuery): Promise<OrderRecord[]>;
   getOrderRecordByPolymarketOrderId(polymarketOrderId: string): Promise<OrderRecord | undefined>;

@@ -3,6 +3,7 @@ import { AgentEvaluationSnapshot, AgentSession, Market, OrderRecord } from "../d
 import { getStore } from "../repositories/storeProvider.js";
 import { createAuditLog } from "./auditService.js";
 import { listMarkets } from "./polymarketService.js";
+import { getUserPnlLedgerSummary } from "./pnlLedgerService.js";
 
 interface AgentWorkerTickSummary {
   reviewed: number;
@@ -62,7 +63,8 @@ const countConsecutiveLosses = (orders: OrderRecord[], marketMap: Map<string, Ma
 const evaluateAgentSession = (
   session: AgentSession,
   orders: OrderRecord[],
-  markets: Market[]
+  markets: Market[],
+  realizedPnlUsd: number
 ): AgentEvaluationSnapshot => {
   const marketMap = new Map(markets.map((market) => [market.id, market]));
   const relevantOrders = orders.filter((order) => {
@@ -113,13 +115,15 @@ const evaluateAgentSession = (
   return {
     deployedUsd: Number(deployedUsd.toFixed(2)),
     markToMarketPnlUsd: Number(markToMarketPnlUsd.toFixed(2)),
+    realizedPnlUsd: Number(realizedPnlUsd.toFixed(2)),
     dayPnlUsd: Number(dayPnlUsd.toFixed(2)),
     drawdownPct: Number(drawdownPct.toFixed(2)),
     consecutiveLosses,
     haltTriggered: Boolean(haltReason),
     haltReason,
     executedOrders: relevantOrders.length,
-    effectiveBankrollUsd: Number((session.plan.bankrollUsd + markToMarketPnlUsd).toFixed(2))
+    effectiveBankrollUsd: Number((session.plan.bankrollUsd + realizedPnlUsd + markToMarketPnlUsd).toFixed(2)),
+    compoundingBankrollUsd: Number((session.plan.bankrollUsd + realizedPnlUsd).toFixed(2))
   };
 };
 
@@ -170,7 +174,8 @@ export const processAgentSessionsTick = async (maxSessions = 20): Promise<AgentW
     }
 
     const orders = await store.listOrderRecords({ userId: session.userId, limit: 500 });
-    const evaluation = evaluateAgentSession(session, orders, markets);
+    const pnlSummary = await getUserPnlLedgerSummary(session.userId);
+    const evaluation = evaluateAgentSession(session, orders, markets, pnlSummary.totalRealizedPnlUsd);
     const nextStatus = evaluation.haltTriggered ? "halted" : "running";
 
     await store.upsertAgentSession({

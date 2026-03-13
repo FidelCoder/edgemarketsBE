@@ -10,6 +10,7 @@ import {
 import { getStore } from "../repositories/storeProvider.js";
 import { createAuditLog } from "./auditService.js";
 import { getMarketById } from "./polymarketService.js";
+import { syncUserPnlLedger } from "./pnlLedgerService.js";
 import { getStrategyWithMarket } from "./strategyService.js";
 
 const sortByUpdatedAtDesc = <T extends { updatedAt: string }>(items: T[]): T[] => {
@@ -97,6 +98,10 @@ export const upsertOrderRecord = async (payload: CreateOrderRecordInput): Promis
         errorMessage: record.errorMessage
       }
     });
+  }
+
+  if (record.status === "filled") {
+    await syncUserPnlLedger(payload.userId);
   }
 
   return record;

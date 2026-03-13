@@ -55,12 +55,14 @@ const baseAgentSessionPayload = {
   lastEvaluation: {
     deployedUsd: 0,
     markToMarketPnlUsd: 0,
+    realizedPnlUsd: 0,
     dayPnlUsd: 0,
     drawdownPct: 0,
     consecutiveLosses: 0,
     haltTriggered: false,
     executedOrders: 0,
-    effectiveBankrollUsd: 1000
+    effectiveBankrollUsd: 1000,
+    compoundingBankrollUsd: 1000
   }
 };
 

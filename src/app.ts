@@ -10,6 +10,7 @@ import { registerAuthRoutes } from "./routes/authRoutes.js";
 import { registerHealthRoute } from "./routes/healthRoute.js";
 import { registerMarketRoutes } from "./routes/marketRoutes.js";
 import { registerOrderRoutes } from "./routes/orderRoutes.js";
+import { registerPnlLedgerRoutes } from "./routes/pnlLedgerRoutes.js";
 import { registerPolymarketRoutes } from "./routes/polymarketRoutes.js";
 import { registerRuntimeRoutes } from "./routes/runtimeRoutes.js";
 import { registerStrategyRoutes } from "./routes/strategyRoutes.js";
@@ -39,6 +40,7 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   await registerHealthRoute(app);
   await registerMarketRoutes(app);
   await registerPolymarketRoutes(app);
+  await registerPnlLedgerRoutes(app);
   await registerAiRoutes(app);
   await registerAgentRoutes(app);
   await registerAuthRoutes(app);

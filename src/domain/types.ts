@@ -288,6 +288,7 @@ export type AgentSessionStatus = "draft" | "running" | "halted";
 export interface AgentEvaluationSnapshot {
   deployedUsd: number;
   markToMarketPnlUsd: number;
+  realizedPnlUsd: number;
   dayPnlUsd: number;
   drawdownPct: number;
   consecutiveLosses: number;
@@ -295,6 +296,7 @@ export interface AgentEvaluationSnapshot {
   haltReason?: string;
   executedOrders: number;
   effectiveBankrollUsd: number;
+  compoundingBankrollUsd: number;
 }
 
 export interface AgentSession {
@@ -574,6 +576,62 @@ export interface OrderRecordQuery {
   creatorHandle?: string;
   status?: OrderLifecycleStatus;
   limit?: number;
+}
+
+export interface PnlLedgerEntry {
+  id: string;
+  key: string;
+  userId: string;
+  marketId: string;
+  outcome: "YES" | "NO";
+  source: OrderSource;
+  openingOrderId: string;
+  closingOrderId: string;
+  matchedSize: number;
+  openingPrice: number;
+  closingPrice: number;
+  costBasisUsd: number;
+  proceedsUsd: number;
+  realizedPnlUsd: number;
+  openedAt: string;
+  closedAt: string;
+  createdAt: string;
+}
+
+export interface CreatePnlLedgerEntryInput {
+  key: string;
+  userId: string;
+  marketId: string;
+  outcome: "YES" | "NO";
+  source: OrderSource;
+  openingOrderId: string;
+  closingOrderId: string;
+  matchedSize: number;
+  openingPrice: number;
+  closingPrice: number;
+  costBasisUsd: number;
+  proceedsUsd: number;
+  realizedPnlUsd: number;
+  openedAt: string;
+  closedAt: string;
+}
+
+export interface PnlLedgerQuery {
+  userId?: string;
+  limit?: number;
+}
+
+export interface PnlLedgerSummary {
+  userId: string;
+  closedTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  flatTrades: number;
+  totalCostBasisUsd: number;
+  totalProceedsUsd: number;
+  totalRealizedPnlUsd: number;
+  winRate: number;
+  latestClosedAt?: string;
 }
 
 export interface CreatorPerformanceSummary {

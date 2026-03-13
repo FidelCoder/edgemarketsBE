@@ -8,6 +8,7 @@ import {
   CreateExecutionLogInput,
   CreateIdempotencyRecordInput,
   CreateOrderRecordInput,
+  CreatePnlLedgerEntryInput,
   CreateSessionHandoffInput,
   CreateTriggerJobInput,
   ExecutionLog,
@@ -16,6 +17,8 @@ import {
   Market,
   OrderRecord,
   OrderRecordQuery,
+  PnlLedgerEntry,
+  PnlLedgerQuery,
   SessionHandoff,
   StablecoinAsset,
   Strategy,
@@ -62,6 +65,7 @@ export class InMemoryStore implements DataStore {
   private authSessions: AuthSession[];
   private sessionHandoffs: SessionHandoff[];
   private agentSessions: AgentSession[];
+  private pnlLedgerEntries: PnlLedgerEntry[];
   private orderRecords: OrderRecord[];
 
   constructor() {
@@ -76,6 +80,7 @@ export class InMemoryStore implements DataStore {
     this.authSessions = [];
     this.sessionHandoffs = [];
     this.agentSessions = [];
+    this.pnlLedgerEntries = [];
     this.orderRecords = [];
   }
 
@@ -471,6 +476,40 @@ export class InMemoryStore implements DataStore {
 
     this.agentSessions = [created, ...this.agentSessions];
     return created;
+  }
+
+  public async getPnlLedgerEntryByKey(key: string): Promise<PnlLedgerEntry | undefined> {
+    return this.pnlLedgerEntries.find((entry) => entry.key === key);
+  }
+
+  public async createPnlLedgerEntry(payload: CreatePnlLedgerEntryInput): Promise<PnlLedgerEntry> {
+    const existing = await this.getPnlLedgerEntryByKey(payload.key);
+
+    if (existing) {
+      throw makeDuplicateError("Duplicate pnl ledger entry.");
+    }
+
+    const created: PnlLedgerEntry = {
+      id: createId(),
+      ...payload,
+      createdAt: nowIso()
+    };
+
+    this.pnlLedgerEntries = [created, ...this.pnlLedgerEntries];
+    return created;
+  }
+
+  public async listPnlLedgerEntries(query?: PnlLedgerQuery): Promise<PnlLedgerEntry[]> {
+    const filtered = this.pnlLedgerEntries.filter((entry) => {
+      if (query?.userId && entry.userId !== query.userId) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const sorted = sortByCreatedAtDesc(filtered);
+    return sorted.slice(0, query?.limit ?? 100);
   }
 
   public async upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord> {
