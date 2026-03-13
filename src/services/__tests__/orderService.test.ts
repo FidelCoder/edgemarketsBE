@@ -4,9 +4,9 @@ const loadModules = async () => {
   vi.resetModules();
   const { buildApp } = await import("../../app.js");
   const { getCreatorPerformance } = await import("../orderService.js");
-  const { syncUserPnlLedger } = await import("../pnlLedgerService.js");
+  const { getUserPnlLedgerRollups, syncUserPnlLedger } = await import("../pnlLedgerService.js");
   const { getStore } = await import("../../repositories/storeProvider.js");
-  return { buildApp, getCreatorPerformance, syncUserPnlLedger, getStore };
+  return { buildApp, getCreatorPerformance, getUserPnlLedgerRollups, syncUserPnlLedger, getStore };
 };
 
 describe("order service", () => {
@@ -93,6 +93,82 @@ describe("order service", () => {
     expect(entries[0]?.matchedSize).toBe(60);
     expect(entries[0]?.costBasisUsd).toBe(24);
     expect(entries[0]?.proceedsUsd).toBe(33);
+
+    await app.close();
+  });
+
+  it("aggregates realized pnl rollups by market, category, and strategy", async () => {
+    const { buildApp, getStore, getUserPnlLedgerRollups } = await loadModules();
+    const app = await buildApp();
+    const store = getStore();
+    const userId = "wallet:0xrollup";
+    const walletAddress = "0xabc0000000000000000000000000000000000001";
+
+    await store.upsertOrderRecord({
+      polymarketOrderId: "pm-rollup-buy-1",
+      source: "strategy",
+      strategyId: "strategy-btc-breakout",
+      creatorHandle: "quantnairobi",
+      marketId: "market-btc-100k-2026",
+      userId,
+      walletAddress,
+      funderAddress: walletAddress,
+      tokenId: "token-yes-1",
+      outcome: "YES",
+      action: "buy_yes",
+      side: "BUY",
+      orderType: "GTC",
+      price: 0.4,
+      size: 50,
+      amountUsd: 20,
+      status: "filled",
+      tradeStatus: "CONFIRMED",
+      filledAt: new Date("2026-03-13T00:00:00.000Z").toISOString()
+    });
+
+    await store.upsertOrderRecord({
+      polymarketOrderId: "pm-rollup-sell-1",
+      source: "strategy",
+      strategyId: "strategy-btc-breakout",
+      creatorHandle: "quantnairobi",
+      marketId: "market-btc-100k-2026",
+      userId,
+      walletAddress,
+      funderAddress: walletAddress,
+      tokenId: "token-yes-1",
+      outcome: "YES",
+      action: "sell_yes",
+      side: "SELL",
+      orderType: "GTC",
+      price: 0.52,
+      size: 50,
+      amountUsd: 26,
+      status: "filled",
+      tradeStatus: "CONFIRMED",
+      filledAt: new Date("2026-03-13T01:00:00.000Z").toISOString()
+    });
+
+    const rollups = await getUserPnlLedgerRollups(userId, 5);
+
+    expect(rollups.byMarket[0]).toMatchObject({
+      key: "market-btc-100k-2026",
+      label: "Will BTC touch $100k before Dec 31, 2026?",
+      closedTrades: 1,
+      totalRealizedPnlUsd: 6
+    });
+    expect(rollups.byCategory[0]).toMatchObject({
+      key: "Crypto",
+      label: "Crypto",
+      closedTrades: 1,
+      totalRealizedPnlUsd: 6
+    });
+    expect(rollups.byStrategy[0]).toMatchObject({
+      key: "strategy-btc-breakout",
+      label: "BTC Breakout Momentum",
+      subtitle: "quantnairobi",
+      closedTrades: 1,
+      totalRealizedPnlUsd: 6
+    });
 
     await app.close();
   });

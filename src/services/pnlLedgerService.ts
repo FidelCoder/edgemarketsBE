@@ -1,5 +1,14 @@
-import { PnlLedgerEntry, PnlLedgerSummary } from "../domain/types.js";
+import {
+  Market,
+  OrderRecord,
+  PnlLedgerEntry,
+  PnlLedgerRollupItem,
+  PnlLedgerRollups,
+  PnlLedgerSummary,
+  Strategy
+} from "../domain/types.js";
 import { getStore } from "../repositories/storeProvider.js";
+import { listMarkets } from "./polymarketService.js";
 
 interface OpenLot {
   orderId: string;
@@ -47,6 +56,120 @@ const buildSummary = (userId: string, entries: PnlLedgerEntry[]): PnlLedgerSumma
     totalRealizedPnlUsd,
     winRate: entries.length > 0 ? Number((winningTrades / entries.length).toFixed(4)) : 0,
     latestClosedAt: entries[0]?.closedAt
+  };
+};
+
+interface RollupAccumulator {
+  key: string;
+  label: string;
+  subtitle?: string;
+  closedTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  flatTrades: number;
+  totalRealizedPnlUsd: number;
+}
+
+const sortRollups = (items: RollupAccumulator[]): PnlLedgerRollupItem[] => {
+  return [...items]
+    .sort((left, right) => {
+      const pnlDelta = Math.abs(right.totalRealizedPnlUsd) - Math.abs(left.totalRealizedPnlUsd);
+
+      if (pnlDelta !== 0) {
+        return pnlDelta;
+      }
+
+      return right.closedTrades - left.closedTrades;
+    })
+    .map((item) => ({
+      key: item.key,
+      label: item.label,
+      subtitle: item.subtitle,
+      closedTrades: item.closedTrades,
+      winningTrades: item.winningTrades,
+      losingTrades: item.losingTrades,
+      flatTrades: item.flatTrades,
+      totalRealizedPnlUsd: round(item.totalRealizedPnlUsd),
+      winRate: item.closedTrades > 0 ? Number((item.winningTrades / item.closedTrades).toFixed(4)) : 0
+    }));
+};
+
+const accumulateRollup = (
+  accumulator: Map<string, RollupAccumulator>,
+  entry: PnlLedgerEntry,
+  key: string,
+  label: string,
+  subtitle?: string
+): void => {
+  const current = accumulator.get(key) ?? {
+    key,
+    label,
+    subtitle,
+    closedTrades: 0,
+    winningTrades: 0,
+    losingTrades: 0,
+    flatTrades: 0,
+    totalRealizedPnlUsd: 0
+  };
+
+  current.closedTrades += 1;
+  current.totalRealizedPnlUsd = round(current.totalRealizedPnlUsd + entry.realizedPnlUsd);
+
+  if (entry.realizedPnlUsd > 0) {
+    current.winningTrades += 1;
+  } else if (entry.realizedPnlUsd < 0) {
+    current.losingTrades += 1;
+  } else {
+    current.flatTrades += 1;
+  }
+
+  accumulator.set(key, current);
+};
+
+const buildRollups = (
+  userId: string,
+  entries: PnlLedgerEntry[],
+  orders: OrderRecord[],
+  markets: Market[],
+  strategies: Strategy[],
+  limit: number
+): PnlLedgerRollups => {
+  const marketMap = new Map(markets.map((market) => [market.id, market]));
+  const strategyMap = new Map(strategies.map((strategy) => [strategy.id, strategy]));
+  const orderMap = new Map(orders.map((order) => [order.id, order]));
+  const byMarket = new Map<string, RollupAccumulator>();
+  const byCategory = new Map<string, RollupAccumulator>();
+  const byStrategy = new Map<string, RollupAccumulator>();
+
+  for (const entry of entries) {
+    const openingOrder = orderMap.get(entry.openingOrderId) ?? orderMap.get(entry.closingOrderId);
+    const market = marketMap.get(entry.marketId);
+    const strategyId = openingOrder?.strategyId ?? `market:${entry.marketId}`;
+    const strategy = strategyMap.get(strategyId);
+    const category = market?.category ?? "Uncategorized";
+
+    accumulateRollup(
+      byMarket,
+      entry,
+      entry.marketId,
+      market?.question ?? entry.marketId,
+      market ? `${market.category} · ${market.subcategory}` : entry.outcome
+    );
+    accumulateRollup(byCategory, entry, category, category);
+    accumulateRollup(
+      byStrategy,
+      entry,
+      strategyId,
+      strategy?.name ?? strategyId,
+      strategy?.creatorHandle ?? openingOrder?.creatorHandle ?? (entry.source === "agent" ? "Agent" : undefined)
+    );
+  }
+
+  return {
+    userId,
+    byMarket: sortRollups([...byMarket.values()]).slice(0, limit),
+    byCategory: sortRollups([...byCategory.values()]).slice(0, limit),
+    byStrategy: sortRollups([...byStrategy.values()]).slice(0, limit)
   };
 };
 
@@ -140,4 +263,20 @@ export const getUserPnlLedgerSummary = async (userId: string): Promise<PnlLedger
   await syncUserPnlLedger(userId);
   const entries = await store.listPnlLedgerEntries({ userId, limit: 5000 });
   return buildSummary(userId, entries);
+};
+
+export const getUserPnlLedgerRollups = async (userId: string, limit = 5): Promise<PnlLedgerRollups> => {
+  const store = getStore();
+  await syncUserPnlLedger(userId);
+
+  const [entries, orders, strategies, liveMarkets, storedMarkets] = await Promise.all([
+    store.listPnlLedgerEntries({ userId, limit: 5000 }),
+    store.listOrderRecords({ userId, limit: 5000 }),
+    store.listStrategies(),
+    listMarkets(),
+    store.listMarkets()
+  ]);
+  const markets = liveMarkets.length > 0 ? liveMarkets : storedMarkets;
+
+  return buildRollups(userId, entries, orders, markets, strategies, limit);
 };
