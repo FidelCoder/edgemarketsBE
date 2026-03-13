@@ -284,6 +284,7 @@ export interface AutomationPlan {
 }
 
 export type AgentSessionStatus = "draft" | "running" | "halted";
+export type AgentReviewDecision = "hold" | "halt";
 
 export interface AgentEvaluationSnapshot {
   deployedUsd: number;
@@ -314,6 +315,21 @@ export interface AgentSession {
   updatedAt: string;
 }
 
+export interface AgentReviewRecord {
+  id: string;
+  userId: string;
+  sessionId: string;
+  source: "worker";
+  decision: AgentReviewDecision;
+  reason?: string;
+  reviewedAt: string;
+  evaluation: AgentEvaluationSnapshot;
+  planBankrollUsd: number;
+  executedMarketCount: number;
+  executedOrderCount: number;
+  createdAt: string;
+}
+
 export interface UpsertAgentSessionInput {
   userId: string;
   walletAddress: string;
@@ -324,6 +340,24 @@ export interface UpsertAgentSessionInput {
   haltReason?: string;
   lastEvaluation?: AgentEvaluationSnapshot;
   lastReviewedAt?: string;
+}
+
+export interface CreateAgentReviewInput {
+  userId: string;
+  sessionId: string;
+  source: "worker";
+  decision: AgentReviewDecision;
+  reason?: string;
+  reviewedAt: string;
+  evaluation: AgentEvaluationSnapshot;
+  planBankrollUsd: number;
+  executedMarketCount: number;
+  executedOrderCount: number;
+}
+
+export interface AgentReviewQuery {
+  userId?: string;
+  limit?: number;
 }
 
 export interface AiProviderSummary {

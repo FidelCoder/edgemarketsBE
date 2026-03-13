@@ -186,6 +186,19 @@ describe("agent session routes", () => {
     expect(runResponse.statusCode).toBe(200);
     expect(runResponse.json().data.reviewed).toBe(1);
 
+    const reviewsResponse = await app.inject({
+      method: "GET",
+      url: "/api/agent/reviews?limit=5",
+      headers: {
+        authorization: `Bearer ${session.token}`
+      }
+    });
+
+    expect(reviewsResponse.statusCode).toBe(200);
+    expect(reviewsResponse.json().data).toHaveLength(1);
+    expect(reviewsResponse.json().data[0].source).toBe("worker");
+    expect(reviewsResponse.json().data[0].decision).toBe("hold");
+
     await app.close();
   });
 });

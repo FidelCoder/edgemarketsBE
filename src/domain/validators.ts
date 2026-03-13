@@ -69,6 +69,10 @@ export const agentWorkerRunSchema = z.object({
   maxSessions: z.number().int().min(1).max(50).optional()
 });
 
+export const agentReviewQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).optional()
+});
+
 export const auditLogQuerySchema = z.object({
   actorId: z.string().min(3).max(64).optional(),
   entityType: z

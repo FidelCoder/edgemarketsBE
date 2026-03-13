@@ -1,9 +1,12 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import {
+  AgentReviewQuery,
+  AgentReviewRecord,
   AgentSession,
   AuthSession,
   AuditLog,
   AuditLogQuery,
+  CreateAgentReviewInput,
   CreateAuthSessionInput,
   CreateAuditLogInput,
   CreateExecutionLogInput,
@@ -48,6 +51,7 @@ interface StoreCollections {
   authSessions: Collection<AuthSession>;
   sessionHandoffs: Collection<SessionHandoff>;
   agentSessions: Collection<AgentSession>;
+  agentReviews: Collection<AgentReviewRecord>;
   pnlLedgerEntries: Collection<PnlLedgerEntry>;
   orderRecords: Collection<OrderRecord>;
 }
@@ -100,6 +104,9 @@ export class MongoStore implements DataStore {
       collections.agentSessions.createIndex({ userId: 1 }, { unique: true }),
       collections.agentSessions.createIndex({ status: 1, updatedAt: -1 }),
       collections.agentSessions.createIndex({ updatedAt: -1 }),
+      collections.agentReviews.createIndex({ id: 1 }, { unique: true }),
+      collections.agentReviews.createIndex({ userId: 1, createdAt: -1 }),
+      collections.agentReviews.createIndex({ sessionId: 1, createdAt: -1 }),
       collections.pnlLedgerEntries.createIndex({ id: 1 }, { unique: true }),
       collections.pnlLedgerEntries.createIndex({ key: 1 }, { unique: true }),
       collections.pnlLedgerEntries.createIndex({ userId: 1, createdAt: -1 }),
@@ -538,6 +545,32 @@ export class MongoStore implements DataStore {
     return created;
   }
 
+  public async createAgentReview(payload: CreateAgentReviewInput): Promise<AgentReviewRecord> {
+    const created: AgentReviewRecord = {
+      id: createId(),
+      ...payload,
+      createdAt: nowIso()
+    };
+
+    await this.getCollections().agentReviews.insertOne(created);
+    return created;
+  }
+
+  public async listAgentReviews(query?: AgentReviewQuery): Promise<AgentReviewRecord[]> {
+    const filter: Record<string, string> = {};
+
+    if (query?.userId) {
+      filter.userId = query.userId;
+    }
+
+    return this.getCollections()
+      .agentReviews
+      .find(filter, { projection: { _id: 0 } })
+      .sort(sortByCreatedAtDesc)
+      .limit(query?.limit ?? 100)
+      .toArray();
+  }
+
   public async getPnlLedgerEntryByKey(key: string): Promise<PnlLedgerEntry | undefined> {
     return this.getCollections().pnlLedgerEntries.findOne(
       { key },
@@ -658,6 +691,7 @@ export class MongoStore implements DataStore {
       authSessions: this.db.collection<AuthSession>("auth_sessions"),
       sessionHandoffs: this.db.collection<SessionHandoff>("session_handoffs"),
       agentSessions: this.db.collection<AgentSession>("agent_sessions"),
+      agentReviews: this.db.collection<AgentReviewRecord>("agent_reviews"),
       pnlLedgerEntries: this.db.collection<PnlLedgerEntry>("pnl_ledger_entries"),
       orderRecords: this.db.collection<OrderRecord>("order_records")
     };

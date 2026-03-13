@@ -1,8 +1,11 @@
 import {
+  AgentReviewQuery,
+  AgentReviewRecord,
   AgentSession,
   AuthSession,
   AuditLog,
   AuditLogQuery,
+  CreateAgentReviewInput,
   CreateAuthSessionInput,
   CreateAuditLogInput,
   CreateExecutionLogInput,
@@ -65,6 +68,7 @@ export class InMemoryStore implements DataStore {
   private authSessions: AuthSession[];
   private sessionHandoffs: SessionHandoff[];
   private agentSessions: AgentSession[];
+  private agentReviews: AgentReviewRecord[];
   private pnlLedgerEntries: PnlLedgerEntry[];
   private orderRecords: OrderRecord[];
 
@@ -80,6 +84,7 @@ export class InMemoryStore implements DataStore {
     this.authSessions = [];
     this.sessionHandoffs = [];
     this.agentSessions = [];
+    this.agentReviews = [];
     this.pnlLedgerEntries = [];
     this.orderRecords = [];
   }
@@ -476,6 +481,30 @@ export class InMemoryStore implements DataStore {
 
     this.agentSessions = [created, ...this.agentSessions];
     return created;
+  }
+
+  public async createAgentReview(payload: CreateAgentReviewInput): Promise<AgentReviewRecord> {
+    const created: AgentReviewRecord = {
+      id: createId(),
+      ...payload,
+      createdAt: nowIso()
+    };
+
+    this.agentReviews = [created, ...this.agentReviews];
+    return created;
+  }
+
+  public async listAgentReviews(query?: AgentReviewQuery): Promise<AgentReviewRecord[]> {
+    const filtered = this.agentReviews.filter((review) => {
+      if (query?.userId && review.userId !== query.userId) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const sorted = sortByCreatedAtDesc(filtered);
+    return sorted.slice(0, query?.limit ?? 100);
   }
 
   public async getPnlLedgerEntryByKey(key: string): Promise<PnlLedgerEntry | undefined> {

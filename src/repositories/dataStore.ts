@@ -1,8 +1,11 @@
 import {
+  AgentReviewQuery,
+  AgentReviewRecord,
   AgentSession,
   AuthSession,
   AuditLog,
   AuditLogQuery,
+  CreateAgentReviewInput,
   CreateAuthSessionInput,
   CreateAuditLogInput,
   CreateExecutionLogInput,
@@ -58,6 +61,8 @@ export interface DataStore {
   listAgentSessions(status?: AgentSession["status"]): Promise<AgentSession[]>;
   getAgentSessionByUserId(userId: string): Promise<AgentSession | undefined>;
   upsertAgentSession(payload: UpsertAgentSessionInput): Promise<AgentSession>;
+  createAgentReview(payload: CreateAgentReviewInput): Promise<AgentReviewRecord>;
+  listAgentReviews(query?: AgentReviewQuery): Promise<AgentReviewRecord[]>;
   getPnlLedgerEntryByKey(key: string): Promise<PnlLedgerEntry | undefined>;
   createPnlLedgerEntry(payload: CreatePnlLedgerEntryInput): Promise<PnlLedgerEntry>;
   listPnlLedgerEntries(query?: PnlLedgerQuery): Promise<PnlLedgerEntry[]>;

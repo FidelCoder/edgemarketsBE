@@ -1,5 +1,5 @@
 import { AppError } from "../domain/errors.js";
-import { AgentEvaluationSnapshot, AgentSession, Market, OrderRecord } from "../domain/types.js";
+import { AgentEvaluationSnapshot, AgentReviewDecision, AgentSession, Market, OrderRecord } from "../domain/types.js";
 import { getStore } from "../repositories/storeProvider.js";
 import { createAuditLog } from "./auditService.js";
 import { listMarkets } from "./polymarketService.js";
@@ -177,8 +177,10 @@ export const processAgentSessionsTick = async (maxSessions = 20): Promise<AgentW
     const pnlSummary = await getUserPnlLedgerSummary(session.userId);
     const evaluation = evaluateAgentSession(session, orders, markets, pnlSummary.totalRealizedPnlUsd);
     const nextStatus = evaluation.haltTriggered ? "halted" : "running";
+    const decision: AgentReviewDecision = evaluation.haltTriggered ? "halt" : "hold";
+    const reviewedAt = nowIso();
 
-    await store.upsertAgentSession({
+    const savedSession = await store.upsertAgentSession({
       userId: session.userId,
       walletAddress: session.walletAddress,
       status: nextStatus,
@@ -187,7 +189,20 @@ export const processAgentSessionsTick = async (maxSessions = 20): Promise<AgentW
       executedMarketIds: session.executedMarketIds,
       haltReason: evaluation.haltReason,
       lastEvaluation: evaluation,
-      lastReviewedAt: nowIso()
+      lastReviewedAt: reviewedAt
+    });
+
+    await store.createAgentReview({
+      userId: session.userId,
+      sessionId: savedSession.id,
+      source: "worker",
+      decision,
+      reason: evaluation.haltReason,
+      reviewedAt,
+      evaluation,
+      planBankrollUsd: session.plan.bankrollUsd,
+      executedMarketCount: session.executedMarketIds.length,
+      executedOrderCount: session.executedOrderIds.length
     });
 
     summary.reviewed += 1;

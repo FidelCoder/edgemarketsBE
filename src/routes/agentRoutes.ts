@@ -1,7 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { AppError } from "../domain/errors.js";
-import { agentWorkerRunSchema, upsertAgentSessionSchema } from "../domain/validators.js";
+import { agentReviewQuerySchema, agentWorkerRunSchema, upsertAgentSessionSchema } from "../domain/validators.js";
 import { getCurrentSession } from "../services/authService.js";
+import { listUserAgentReviews } from "../services/agentReviewService.js";
 import { getAgentSessionForAuthSession, upsertAgentSession } from "../services/agentSessionService.js";
 import { processAgentSessionsTick } from "../services/agentWorkerService.js";
 
@@ -25,6 +26,20 @@ export const registerAgentRoutes = async (app: FastifyInstance): Promise<void> =
 
     return {
       data: await upsertAgentSession(session, parsedBody.data),
+      error: null
+    };
+  });
+
+  app.get("/api/agent/reviews", async (request) => {
+    const session = await getCurrentSession(request.headers.authorization);
+    const parsedQuery = agentReviewQuerySchema.safeParse(request.query ?? {});
+
+    if (!parsedQuery.success) {
+      throw new AppError(parsedQuery.error.errors[0]?.message ?? "Invalid agent review query.", 400);
+    }
+
+    return {
+      data: await listUserAgentReviews(session.userId, parsedQuery.data.limit ?? 20),
       error: null
     };
   });
