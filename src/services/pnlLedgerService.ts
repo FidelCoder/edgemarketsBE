@@ -9,6 +9,14 @@ import {
 } from "../domain/types.js";
 import { getStore } from "../repositories/storeProvider.js";
 import { listMarkets } from "./polymarketService.js";
+import { isWithinDateRange, toDateRangeBounds } from "./analyticsDateRange.js";
+import { toCsv } from "./csvExportService.js";
+
+interface PnlLedgerFilters {
+  limit?: number;
+  dateFrom?: string;
+  dateTo?: string;
+}
 
 interface OpenLot {
   orderId: string;
@@ -252,20 +260,39 @@ export const syncUserPnlLedger = async (userId: string): Promise<PnlLedgerSummar
   return buildSummary(userId, entries);
 };
 
-export const listUserPnlLedgerEntries = async (userId: string, limit = 20): Promise<PnlLedgerEntry[]> => {
-  const store = getStore();
-  await syncUserPnlLedger(userId);
-  return store.listPnlLedgerEntries({ userId, limit });
+const filterEntries = (entries: PnlLedgerEntry[], filters: PnlLedgerFilters): PnlLedgerEntry[] => {
+  const bounds = toDateRangeBounds(filters);
+  const filtered = entries.filter((entry) => isWithinDateRange(entry.closedAt, bounds));
+
+  return filtered.slice(0, filters.limit ?? 20);
 };
 
-export const getUserPnlLedgerSummary = async (userId: string): Promise<PnlLedgerSummary> => {
+const listFilteredEntries = async (userId: string, filters: PnlLedgerFilters): Promise<PnlLedgerEntry[]> => {
   const store = getStore();
   await syncUserPnlLedger(userId);
   const entries = await store.listPnlLedgerEntries({ userId, limit: 5000 });
+  return filterEntries(entries, filters);
+};
+
+export const listUserPnlLedgerEntries = async (
+  userId: string,
+  filters: PnlLedgerFilters = {}
+): Promise<PnlLedgerEntry[]> => {
+  return listFilteredEntries(userId, filters);
+};
+
+export const getUserPnlLedgerSummary = async (
+  userId: string,
+  filters: Pick<PnlLedgerFilters, "dateFrom" | "dateTo"> = {}
+): Promise<PnlLedgerSummary> => {
+  const entries = await listFilteredEntries(userId, { ...filters, limit: 5000 });
   return buildSummary(userId, entries);
 };
 
-export const getUserPnlLedgerRollups = async (userId: string, limit = 5): Promise<PnlLedgerRollups> => {
+export const getUserPnlLedgerRollups = async (
+  userId: string,
+  filters: PnlLedgerFilters = {}
+): Promise<PnlLedgerRollups> => {
   const store = getStore();
   await syncUserPnlLedger(userId);
 
@@ -277,6 +304,45 @@ export const getUserPnlLedgerRollups = async (userId: string, limit = 5): Promis
     store.listMarkets()
   ]);
   const markets = liveMarkets.length > 0 ? liveMarkets : storedMarkets;
+  const filteredEntries = filterEntries(entries, { ...filters, limit: 5000 });
 
-  return buildRollups(userId, entries, orders, markets, strategies, limit);
+  return buildRollups(userId, filteredEntries, orders, markets, strategies, filters.limit ?? 5);
+};
+
+export const exportUserPnlLedgerCsv = async (
+  userId: string,
+  filters: PnlLedgerFilters = {}
+): Promise<string> => {
+  const entries = await listFilteredEntries(userId, { ...filters, limit: 5000 });
+
+  return toCsv(
+    [
+      "closedAt",
+      "marketId",
+      "outcome",
+      "source",
+      "matchedSize",
+      "openingPrice",
+      "closingPrice",
+      "costBasisUsd",
+      "proceedsUsd",
+      "realizedPnlUsd",
+      "openingOrderId",
+      "closingOrderId"
+    ],
+    entries.map((entry) => [
+      entry.closedAt,
+      entry.marketId,
+      entry.outcome,
+      entry.source,
+      entry.matchedSize,
+      entry.openingPrice,
+      entry.closingPrice,
+      entry.costBasisUsd,
+      entry.proceedsUsd,
+      entry.realizedPnlUsd,
+      entry.openingOrderId,
+      entry.closingOrderId
+    ])
+  );
 };

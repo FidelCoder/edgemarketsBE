@@ -71,6 +71,8 @@ export const agentWorkerRunSchema = z.object({
 
 export const agentReviewQuerySchema = z.object({
   decision: z.enum(["hold", "halt"]).optional(),
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional()
 });
 
@@ -94,6 +96,8 @@ export const auditLogQuerySchema = z.object({
 });
 
 export const pnlLedgerQuerySchema = z.object({
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional()
 });
 

@@ -201,7 +201,7 @@ describe("agent session routes", () => {
 
     const reviewSummaryResponse = await app.inject({
       method: "GET",
-      url: "/api/agent/reviews/summary",
+      url: "/api/agent/reviews/summary?decision=hold",
       headers: {
         authorization: `Bearer ${session.token}`
       }
@@ -213,6 +213,19 @@ describe("agent session routes", () => {
       holdDecisions: 1,
       haltDecisions: 0
     });
+
+    const exportResponse = await app.inject({
+      method: "GET",
+      url: "/api/agent/reviews/export?decision=hold",
+      headers: {
+        authorization: `Bearer ${session.token}`
+      }
+    });
+
+    expect(exportResponse.statusCode).toBe(200);
+    expect(exportResponse.headers["content-type"]).toContain("text/csv");
+    expect(exportResponse.body).toContain("reviewedAt,decision,reason");
+    expect(exportResponse.body).toContain(",hold,");
 
     await app.close();
   });

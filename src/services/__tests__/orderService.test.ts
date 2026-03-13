@@ -148,7 +148,7 @@ describe("order service", () => {
       filledAt: new Date("2026-03-13T01:00:00.000Z").toISOString()
     });
 
-    const rollups = await getUserPnlLedgerRollups(userId, 5);
+    const rollups = await getUserPnlLedgerRollups(userId, { limit: 5 });
 
     expect(rollups.byMarket[0]).toMatchObject({
       key: "market-btc-100k-2026",
@@ -166,6 +166,118 @@ describe("order service", () => {
       key: "strategy-btc-breakout",
       label: "BTC Breakout Momentum",
       subtitle: "quantnairobi",
+      closedTrades: 1,
+      totalRealizedPnlUsd: 6
+    });
+
+    await app.close();
+  });
+
+  it("filters realized pnl analytics by date range", async () => {
+    const { buildApp, getStore, getUserPnlLedgerRollups, syncUserPnlLedger } = await loadModules();
+    const app = await buildApp();
+    const store = getStore();
+    const userId = "wallet:0xrange";
+    const walletAddress = "0xabc0000000000000000000000000000000000002";
+
+    await store.upsertOrderRecord({
+      polymarketOrderId: "pm-range-buy-old",
+      source: "agent",
+      strategyId: "agent:market-btc-100k-2026",
+      creatorHandle: "edgeagent",
+      marketId: "market-btc-100k-2026",
+      userId,
+      walletAddress,
+      funderAddress: walletAddress,
+      tokenId: "token-yes-1",
+      outcome: "YES",
+      action: "buy_yes",
+      side: "BUY",
+      orderType: "GTC",
+      price: 0.4,
+      size: 50,
+      amountUsd: 20,
+      status: "filled",
+      tradeStatus: "CONFIRMED",
+      filledAt: new Date("2026-03-10T00:00:00.000Z").toISOString()
+    });
+
+    await store.upsertOrderRecord({
+      polymarketOrderId: "pm-range-sell-old",
+      source: "agent",
+      strategyId: "agent:market-btc-100k-2026",
+      creatorHandle: "edgeagent",
+      marketId: "market-btc-100k-2026",
+      userId,
+      walletAddress,
+      funderAddress: walletAddress,
+      tokenId: "token-yes-1",
+      outcome: "YES",
+      action: "sell_yes",
+      side: "SELL",
+      orderType: "GTC",
+      price: 0.44,
+      size: 50,
+      amountUsd: 22,
+      status: "filled",
+      tradeStatus: "CONFIRMED",
+      filledAt: new Date("2026-03-10T01:00:00.000Z").toISOString()
+    });
+
+    await store.upsertOrderRecord({
+      polymarketOrderId: "pm-range-buy-new",
+      source: "agent",
+      strategyId: "agent:market-btc-100k-2026",
+      creatorHandle: "edgeagent",
+      marketId: "market-btc-100k-2026",
+      userId,
+      walletAddress,
+      funderAddress: walletAddress,
+      tokenId: "token-yes-1",
+      outcome: "YES",
+      action: "buy_yes",
+      side: "BUY",
+      orderType: "GTC",
+      price: 0.4,
+      size: 50,
+      amountUsd: 20,
+      status: "filled",
+      tradeStatus: "CONFIRMED",
+      filledAt: new Date("2026-03-13T00:00:00.000Z").toISOString()
+    });
+
+    await store.upsertOrderRecord({
+      polymarketOrderId: "pm-range-sell-new",
+      source: "agent",
+      strategyId: "agent:market-btc-100k-2026",
+      creatorHandle: "edgeagent",
+      marketId: "market-btc-100k-2026",
+      userId,
+      walletAddress,
+      funderAddress: walletAddress,
+      tokenId: "token-yes-1",
+      outcome: "YES",
+      action: "sell_yes",
+      side: "SELL",
+      orderType: "GTC",
+      price: 0.52,
+      size: 50,
+      amountUsd: 26,
+      status: "filled",
+      tradeStatus: "CONFIRMED",
+      filledAt: new Date("2026-03-13T01:00:00.000Z").toISOString()
+    });
+
+    await syncUserPnlLedger(userId);
+
+    const filteredRollups = await getUserPnlLedgerRollups(userId, {
+      limit: 5,
+      dateFrom: "2026-03-13",
+      dateTo: "2026-03-13"
+    });
+
+    expect(filteredRollups.byMarket[0]).toMatchObject({
+      key: "market-btc-100k-2026",
       closedTrades: 1,
       totalRealizedPnlUsd: 6
     });
