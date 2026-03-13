@@ -65,6 +65,10 @@ export const triggerWorkerRunSchema = z.object({
   maxJobs: z.number().int().min(1).max(50).optional()
 });
 
+export const agentWorkerRunSchema = z.object({
+  maxSessions: z.number().int().min(1).max(50).optional()
+});
+
 export const auditLogQuerySchema = z.object({
   actorId: z.string().min(3).max(64).optional(),
   entityType: z
@@ -216,6 +220,7 @@ export const createOrderRecordSchema = z.object({
 });
 
 export const orderQuerySchema = z.object({
+  userId: z.string().min(3).max(64).optional(),
   strategyId: z.string().min(2).optional(),
   creatorHandle: z.string().min(2).max(24).regex(/^[a-zA-Z0-9_]+$/).optional(),
   status: orderLifecycleStatusSchema.optional(),

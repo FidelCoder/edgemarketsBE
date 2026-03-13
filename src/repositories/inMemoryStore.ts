@@ -440,6 +440,11 @@ export class InMemoryStore implements DataStore {
     return this.agentSessions.find((session) => session.userId === userId);
   }
 
+  public async listAgentSessions(status?: AgentSession["status"]): Promise<AgentSession[]> {
+    const filtered = status ? this.agentSessions.filter((session) => session.status === status) : this.agentSessions;
+    return sortByUpdatedAtDesc(filtered);
+  }
+
   public async upsertAgentSession(payload: UpsertAgentSessionInput): Promise<AgentSession> {
     const existing = await this.getAgentSessionByUserId(payload.userId);
     const timestamp = nowIso();
@@ -503,6 +508,10 @@ export class InMemoryStore implements DataStore {
 
   public async listOrderRecords(query?: OrderRecordQuery): Promise<OrderRecord[]> {
     const filtered = this.orderRecords.filter((record) => {
+      if (query?.userId && record.userId !== query.userId) {
+        return false;
+      }
+
       if (query?.strategyId && record.strategyId !== query.strategyId) {
         return false;
       }

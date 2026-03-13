@@ -14,6 +14,7 @@ import { registerPolymarketRoutes } from "./routes/polymarketRoutes.js";
 import { registerRuntimeRoutes } from "./routes/runtimeRoutes.js";
 import { registerStrategyRoutes } from "./routes/strategyRoutes.js";
 import { registerTriggerJobRoutes } from "./routes/triggerJobRoutes.js";
+import { startAgentWorker, stopAgentWorker } from "./services/agentWorker.js";
 import { startTriggerWorker, stopTriggerWorker } from "./services/triggerWorker.js";
 
 export const buildApp = async (): Promise<FastifyInstance> => {
@@ -51,8 +52,13 @@ export const buildApp = async (): Promise<FastifyInstance> => {
     startTriggerWorker(app.log);
   }
 
+  if (env.agentWorkerEnabled) {
+    startAgentWorker(app.log);
+  }
+
   app.addHook("onClose", async () => {
     stopTriggerWorker(app.log);
+    stopAgentWorker(app.log);
     await closeStore();
   });
 

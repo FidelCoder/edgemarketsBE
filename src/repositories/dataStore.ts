@@ -52,6 +52,7 @@ export interface DataStore {
   updateAuthSessionLastActive(token: string): Promise<AuthSession | undefined>;
   createSessionHandoff(payload: CreateSessionHandoffInput): Promise<SessionHandoff>;
   consumeSessionHandoff(code: string, consumedAtIso: string): Promise<SessionHandoff | undefined>;
+  listAgentSessions(status?: AgentSession["status"]): Promise<AgentSession[]>;
   getAgentSessionByUserId(userId: string): Promise<AgentSession | undefined>;
   upsertAgentSession(payload: UpsertAgentSessionInput): Promise<AgentSession>;
   upsertOrderRecord(payload: CreateOrderRecordInput): Promise<OrderRecord>;

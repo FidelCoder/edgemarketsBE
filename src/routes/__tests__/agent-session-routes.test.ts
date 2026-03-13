@@ -131,4 +131,59 @@ describe("agent session routes", () => {
 
     await app.close();
   });
+
+  it("runs the agent worker review tick against persisted running sessions", async () => {
+    const wallet = Wallet.createRandom();
+    const app = await loadApp();
+
+    const challengeResponse = await app.inject({
+      method: "POST",
+      url: "/api/auth/challenge",
+      payload: {
+        walletAddress: wallet.address,
+        client: "web"
+      }
+    });
+    const challenge = challengeResponse.json().data;
+    const signature = await wallet.signMessage(challenge.message);
+
+    const verifyResponse = await app.inject({
+      method: "POST",
+      url: "/api/auth/verify",
+      payload: {
+        challengeId: challenge.id,
+        walletAddress: wallet.address,
+        signature,
+        client: "web"
+      }
+    });
+    const session = verifyResponse.json().data;
+
+    const saveResponse = await app.inject({
+      method: "PUT",
+      url: "/api/agent/session",
+      headers: {
+        authorization: `Bearer ${session.token}`
+      },
+      payload: {
+        ...baseAgentSessionPayload,
+        status: "running"
+      }
+    });
+
+    expect(saveResponse.statusCode).toBe(200);
+
+    const runResponse = await app.inject({
+      method: "POST",
+      url: "/api/agent/worker/run-once",
+      payload: {
+        maxSessions: 5
+      }
+    });
+
+    expect(runResponse.statusCode).toBe(200);
+    expect(runResponse.json().data.reviewed).toBe(1);
+
+    await app.close();
+  });
 });

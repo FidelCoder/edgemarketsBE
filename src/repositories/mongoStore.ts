@@ -94,6 +94,7 @@ export class MongoStore implements DataStore {
       collections.sessionHandoffs.createIndex({ expiresAt: 1 }),
       collections.agentSessions.createIndex({ id: 1 }, { unique: true }),
       collections.agentSessions.createIndex({ userId: 1 }, { unique: true }),
+      collections.agentSessions.createIndex({ status: 1, updatedAt: -1 }),
       collections.agentSessions.createIndex({ updatedAt: -1 }),
       collections.orderRecords.createIndex({ id: 1 }, { unique: true }),
       collections.orderRecords.createIndex({ polymarketOrderId: 1 }, { unique: true }),
@@ -488,6 +489,16 @@ export class MongoStore implements DataStore {
     ) as Promise<AgentSession | undefined>;
   }
 
+  public async listAgentSessions(status?: AgentSession["status"]): Promise<AgentSession[]> {
+    const filter = status ? { status } : {};
+
+    return this.getCollections()
+      .agentSessions
+      .find(filter, { projection: { _id: 0 } })
+      .sort(sortByUpdatedAtDesc)
+      .toArray();
+  }
+
   public async upsertAgentSession(payload: UpsertAgentSessionInput): Promise<AgentSession> {
     const timestamp = nowIso();
     const existing = await this.getAgentSessionByUserId(payload.userId);
@@ -556,6 +567,10 @@ export class MongoStore implements DataStore {
 
   public async listOrderRecords(query?: OrderRecordQuery): Promise<OrderRecord[]> {
     const filter: Record<string, string> = {};
+
+    if (query?.userId) {
+      filter.userId = query.userId;
+    }
 
     if (query?.strategyId) {
       filter.strategyId = query.strategyId;
