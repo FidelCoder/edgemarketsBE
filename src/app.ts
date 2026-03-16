@@ -7,6 +7,7 @@ import { registerAgentRoutes } from "./routes/agentRoutes.js";
 import { registerAuditRoutes } from "./routes/auditRoutes.js";
 import { registerAiRoutes } from "./routes/aiRoutes.js";
 import { registerAuthRoutes } from "./routes/authRoutes.js";
+import { registerCronRoutes } from "./routes/cronRoutes.js";
 import { registerHealthRoute } from "./routes/healthRoute.js";
 import { registerMarketRoutes } from "./routes/marketRoutes.js";
 import { registerOrderRoutes } from "./routes/orderRoutes.js";
@@ -44,17 +45,20 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   await registerAiRoutes(app);
   await registerAgentRoutes(app);
   await registerAuthRoutes(app);
+  await registerCronRoutes(app);
   await registerRuntimeRoutes(app);
   await registerStrategyRoutes(app);
   await registerTriggerJobRoutes(app);
   await registerOrderRoutes(app);
   await registerAuditRoutes(app);
 
-  if (env.triggerWorkerEnabled) {
+  if (env.isVercel) {
+    app.log.info("Skipping in-process workers because the backend is running on Vercel.");
+  } else if (env.triggerWorkerEnabled) {
     startTriggerWorker(app.log);
   }
 
-  if (env.agentWorkerEnabled) {
+  if (!env.isVercel && env.agentWorkerEnabled) {
     startAgentWorker(app.log);
   }
 

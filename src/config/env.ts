@@ -94,6 +94,7 @@ const toPolymarketChainId = (value: string | undefined): number => {
 
 export const env = {
   port: toPort(process.env.PORT),
+  isVercel: parseBoolean(process.env.VERCEL, false),
   allowedOrigins: splitCsv(process.env.ALLOWED_ORIGINS, [
     "http://localhost:3000",
     "https://polymarket.com",
@@ -130,6 +131,7 @@ export const env = {
   authHandoffTtlSeconds: toPositiveInt(process.env.AUTH_HANDOFF_TTL_SECONDS, 600),
   authChallengeTtlSeconds: toPositiveInt(process.env.AUTH_CHALLENGE_TTL_SECONDS, 300),
   authMessageDomain: process.env.AUTH_MESSAGE_DOMAIN ?? "edgemarkets.xyz",
+  cronSecret: process.env.CRON_SECRET ?? "",
   aiDefaultProvider: defaultAiProvider,
   openAiApiKey: process.env.OPENAI_API_KEY ?? "",
   openAiBaseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
